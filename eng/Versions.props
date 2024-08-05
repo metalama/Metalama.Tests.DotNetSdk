@@ -4,8 +4,8 @@
     <Import Project="MainVersion.props" />
     
     <PropertyGroup>
-        <MyProductVersion>$(MainVersion)$(PackageVersionSuffix)</MyProductVersion>
-        <MyProductAssemblyVersion>$(MainVersion)</MyProductAssemblyVersion>
+        <MetalamaTestsDotNetSdkVersion>$(MainVersion)$(PackageVersionSuffix)</MetalamaTestsDotNetSdkVersion>
+        <MetalamaTestsDotNetSdkAssemblyVersion>$(MainVersion)</MetalamaTestsDotNetSdkAssemblyVersion>
     </PropertyGroup>
 
     <!-- Set the deafult versions of auto-updated dependencies -->
@@ -15,8 +15,8 @@
     <Import Project="Versions.g.props" Condition="Exists('Versions.g.props')" />
 
     <PropertyGroup>
-        <AssemblyVersion>$(MyProductAssemblyVersion)</AssemblyVersion>
-        <Version>$(MyProductVersion)</Version>
+        <AssemblyVersion>$(MetalamaTestsDotNetSdkAssemblyVersion)</AssemblyVersion>
+        <Version>$(MetalamaTestsDotNetSdkVersion)</Version>
     </PropertyGroup>
 
     <!-- Versions of other dependencies are set in Directory.Packages.props. -->

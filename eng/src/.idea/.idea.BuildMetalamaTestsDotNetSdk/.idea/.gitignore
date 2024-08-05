@@ -1,11 +1,11 @@
-﻿# Default ignored files
+# Default ignored files
 /shelf/
 /workspace.xml
 # Rider ignored files
-/.idea.BuildMetalamaTestsDotNetSdk.iml
-/modules.xml
 /contentModel.xml
 /projectSettingsUpdater.xml
+/.idea.BuildMetalamaTestsDotNetSdk.iml
+/modules.xml
 # Editor-based HTTP Client requests
 /httpRequests/
 # Datasource local storage ignored files
