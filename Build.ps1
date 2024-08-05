@@ -1,4 +1,4 @@
-Push-Location -Path "$PSScriptRoot\eng\src"
+Push-Location -Path "$PSScriptRoot/eng/src"
 $exitCode = -1;
 
 try {
