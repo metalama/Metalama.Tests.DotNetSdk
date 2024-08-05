@@ -51,7 +51,6 @@ jobs:
       uses: dorny/test-reporter@v1.9.1
       if: success() || failure()
       with:
-        artifact: ${{ matrix.os }}-v3
         name: report (${{ matrix.os }})
         path: 'artifacts/testResults/*.trx'
         reporter: dotnet-trx
