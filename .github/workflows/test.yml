@@ -1,0 +1,46 @@
+name: Run Tests
+
+on:
+  workflow_dispatch:
+
+jobs:
+
+  build:
+
+    strategy:
+      matrix:
+        # os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest]
+        dotnet-version: ['6.x']
+        configuration: [Debug]
+
+    runs-on: ${{ matrix.os }}  # For a list of available runner types, refer to
+                               # https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on
+
+    # env:
+    #  METALAMA_DIAGNOSTICS: '{"logging": {"processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": true,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false},"trace": {"*": true},"stopLoggingAfterHours": 2.0},"debugging": {"processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": false,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false}},"crashDumps": {"processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": false,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false},"exceptionTypes": ["*"]},"profiling": {"kind": "performance","processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": false,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false}}}'
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install .NET For PostSharp.Engineering
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.2xx # Keep in sync with eng\src\global.json.
+
+    - name: Install .NET For The Test
+      uses: actions/setup-dotnet@v4
+      id: setup-dotnet
+      with:
+        dotnet-version: ${{ matrix.dotnet-version }}
+
+    - name: Set The .NET SDK Version
+      shell: pwsh
+      run: ./Build.ps1 set-sdk-version ${{ steps.setup-dotnet.outputs.dotnet-version }} --nologo
+
+    - name: Run Tests
+      shell: pwsh
+      run: ./Build.ps1 test --nologo
