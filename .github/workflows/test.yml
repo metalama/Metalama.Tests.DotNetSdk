@@ -53,5 +53,5 @@ jobs:
       with:
         artifact: ${{ matrix.os }}-v3
         name: report (${{ matrix.os }})
-        path: '*.trx'
+        path: 'artifacts/testResults/*.trx'
         reporter: dotnet-trx
