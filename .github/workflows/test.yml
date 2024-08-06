@@ -11,7 +11,7 @@ jobs:
       matrix:
         # os: [ubuntu-latest, windows-latest, macos-latest]
         os: [windows-latest]
-        dotnet-version: ['6.x', '7.x', '8.x']
+        dotnet-version: ['6.1xx', '6.4xx', '8.1xx', '8.3xx', '9.1xx']
         configuration: [Debug]
 
     runs-on: ${{ matrix.os }}  # For a list of available runner types, refer to
@@ -51,6 +51,6 @@ jobs:
       uses: dorny/test-reporter@v1.9.1
       if: success() || failure()
       with:
-        name: report (${{ matrix.os }})
+        name: build (${{ matrix.os }}, ${{ matrix.dotnet-version }}, ${{ matrix.configuration }})
         path: 'artifacts/testResults/*.trx'
         reporter: dotnet-trx
