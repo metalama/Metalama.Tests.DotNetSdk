@@ -5,10 +5,14 @@
         <RepoKind>GitHub</RepoKind> <!-- Valid values: AzureRepos | GitHub -->
     </PropertyGroup>
 
+    <!-- Fixes build issue with 6.0.1xx SDK. Remove along with removal of the 6.0.1xx SDK version. -->
+    <PropertyGroup>
+        <DisableStyleCop>true</DisableStyleCop>
+    </PropertyGroup>
+
     <Import Project="eng\Versions.props"/>
     <Import Project="eng\Packaging.props"/>
     <Import Sdk="PostSharp.Engineering.Sdk" Project="BuildOptions.props"/>
     <Import Sdk="PostSharp.Engineering.Sdk" Project="StrongName.props"/>
-    <Import Sdk="PostSharp.Engineering.Sdk" Project="SourceLink.props"/>
 
 </Project>
