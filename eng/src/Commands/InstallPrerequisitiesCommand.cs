@@ -15,7 +15,8 @@ internal class InstallPrerequisitiesCommand : BaseCommand<InstallPrerequisitiesC
         switch ( settings.ProjectType )
         {
             case "maui":
-                if ( !InstallWorkload( context, settings.ProjectType ) )
+            case "maui-blazor":
+                if ( !InstallWorkload( context, "maui" ) )
                 {
                     return false;
                 }

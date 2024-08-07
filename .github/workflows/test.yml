@@ -12,8 +12,11 @@ jobs:
         # os: [ubuntu-latest, windows-latest, macos-latest]
         os: [windows-latest]
         dotnet-version: ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx'] #, '9.x']
-        project-type: ['console', 'maui']
+        project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         configuration: [Debug]
+      exclude:
+        - project-type: maui
+          dotnet-version: 6.0.1xx
       fail-fast: false # Don't stop other jobs if one fails.
 
     runs-on: ${{ matrix.os }}  # For a list of available runner types, refer to
