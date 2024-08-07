@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -14,6 +14,7 @@
 
     <ItemGroup>
         <PackageReference Include="PostSharp.Engineering.BuildTools" Version="$(PostSharpEngineeringVersion)" />
+        <PackageReference Include="System.Reflection.MetadataLoadContext" Version="8.0.0" />
     </ItemGroup>
 
 </Project>
