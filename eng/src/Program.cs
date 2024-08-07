@@ -1,6 +1,7 @@
 ﻿// Copyright (c) SharpCrafters s.r.o. See the LICENSE.md file in the root directory of this repository root for details.
 
 using BuildMetalamaTestsDotNetSdk.Commands;
+using BuildMetalamaTestsDotNetSdk.Helpers;
 using PostSharp.Engineering.BuildTools;
 using PostSharp.Engineering.BuildTools.Build.Model;
 using PostSharp.Engineering.BuildTools.Build.Solutions;
@@ -10,7 +11,7 @@ using MetalamaDependencies = PostSharp.Engineering.BuildTools.Dependencies.Defin
 
 var product = new Product( MetalamaDependencies.DotNetSdkTests )
 {
-    Solutions = [new DotNetSolution( "Metalama.Tests.DotNetSdk.csproj" )],
+    Solutions = [new DotNetSolution( ProjectInfo.ProjectPath )],
     Dependencies = [DevelopmentDependencies.PostSharpEngineering, MetalamaDependencies.Metalama]
 };
 
@@ -20,5 +21,6 @@ commandApp.AddProductCommands( product );
 
 commandApp.Configure( c => c.AddCommand<SetDotNetSdkVersionCommand>( "set-sdk-version" ).WithData( product ) );
 commandApp.Configure( c => c.AddCommand<InstallPrerequisitiesCommand>( "install-prerequisities" ).WithData( product ) );
+commandApp.Configure( c => c.AddCommand<CreateProjectCommand>( "create-project" ).WithData( product ) );
 
 return commandApp.Run( args );

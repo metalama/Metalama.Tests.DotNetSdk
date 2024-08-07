@@ -12,10 +12,14 @@ internal class InstallPrerequisitiesCommand : BaseCommand<InstallPrerequisitiesC
     {
         context.Console.WriteHeading( $"Installing prerequisites for '{settings.ProjectType}' project type." );
 
-        switch (settings.ProjectType )
+        switch ( settings.ProjectType )
         {
             case "maui":
-                InstallWorkload( context, settings.ProjectType );
+                if ( !InstallWorkload( context, settings.ProjectType ) )
+                {
+                    return false;
+                }
+
                 break;
             default:
                 context.Console.WriteImportantMessage( $"'{settings.ProjectType}' project type requires no prerequisities." );

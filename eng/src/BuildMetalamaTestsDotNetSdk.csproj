@@ -8,6 +8,8 @@
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
         <NoWarn>SA0001;CS8002</NoWarn>
+		<!-- Disable the workload resolver to avoid errors comming from missing workloads in the enginnering-specific .NET SDK. -->
+		<MSBuildEnableWorkloadResolver>false</MSBuildEnableWorkloadResolver>
     </PropertyGroup>
 
     <ItemGroup>
