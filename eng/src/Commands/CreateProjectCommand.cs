@@ -12,7 +12,8 @@ internal class CreateProjectCommand : BaseCommand<CreateProjectCommandSettings>
     {
         context.Console.WriteHeading( $"Creating new '{settings.ProjectType}' project." );
 
-        if ( !DotNetInvocationHelper.Run( context, "new", $"{settings.ProjectType} -o {ProjectInfo.ProjectDirectory} -n {ProjectInfo.ProjectName}" ) )
+        // We disable the implicit restore so we don't need to prepare the version file and download artifacts beforehand.
+        if ( !DotNetInvocationHelper.Run( context, "new", $"{settings.ProjectType} -o {ProjectInfo.ProjectDirectory} -n {ProjectInfo.ProjectName} --no-restore" ) )
         {
             return false;
         }

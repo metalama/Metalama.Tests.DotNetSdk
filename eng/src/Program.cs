@@ -11,7 +11,7 @@ using MetalamaDependencies = PostSharp.Engineering.BuildTools.Dependencies.Defin
 
 var product = new Product( MetalamaDependencies.DotNetSdkTests )
 {
-    Solutions = [new DotNetSolution( ProjectInfo.ProjectPath )],
+    Solutions = [new DotNetSolution( ProjectInfo.ProjectPath ) { BuildMethod = BuildMethod.Build }],
     Dependencies = [DevelopmentDependencies.PostSharpEngineering, MetalamaDependencies.Metalama]
 };
 
