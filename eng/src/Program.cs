@@ -10,7 +10,7 @@ using MetalamaDependencies = PostSharp.Engineering.BuildTools.Dependencies.Defin
 
 var product = new Product( MetalamaDependencies.DotNetSdkTests )
 {
-    Solutions = [new DotNetSolution( "Metalama.Tests.DotNetSdk.sln" )],
+    Solutions = [new DotNetSolution( "Metalama.Tests.DotNetSdk.csproj" )],
     Dependencies = [DevelopmentDependencies.PostSharpEngineering, MetalamaDependencies.Metalama]
 };
 
@@ -19,5 +19,6 @@ var commandApp = new CommandApp();
 commandApp.AddProductCommands( product );
 
 commandApp.Configure( c => c.AddCommand<SetDotNetSdkVersionCommand>( "set-sdk-version" ).WithData( product ) );
+commandApp.Configure( c => c.AddCommand<InstallPrerequisitiesCommand>( "install-prerequisities" ).WithData( product ) );
 
 return commandApp.Run( args );

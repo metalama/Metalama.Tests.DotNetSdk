@@ -6,9 +6,9 @@ using System.ComponentModel;
 
 namespace BuildMetalamaTestsDotNetSdk.Commands;
 
-internal class SetDotNetSdkVersionCommandSettings : CommonCommandSettings
+internal class InstallPrerequisitiesCommandSettings : CommonCommandSettings
 {
-    [Description( "The version of the .NET SDK to be set." )]
-    [CommandArgument( 0, "<version>" )]
-    public string Version { get; init; } = null!;
+    [Description( "The type of project, e.g. console, blazor, maui, web, etc." )]
+    [CommandArgument( 0, "<project-type>" )]
+    public string ProjectType { get; init; } = null!;
 }

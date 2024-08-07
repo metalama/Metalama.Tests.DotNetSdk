@@ -8,6 +8,11 @@
         <MetalamaTestsDotNetSdkAssemblyVersion>$(MainVersion)</MetalamaTestsDotNetSdkAssemblyVersion>
     </PropertyGroup>
 
+    <!-- Set versions of dependencies. -->
+    <PropertyGroup>
+        <PostSharpEngineeringVersion>2023.2.115</PostSharpEngineeringVersion>
+    </PropertyGroup>
+
     <!-- Set the deafult versions of auto-updated dependencies -->
     <Import Project="AutoUpdatedVersions.props" />
 
@@ -18,8 +23,5 @@
         <AssemblyVersion>$(MetalamaTestsDotNetSdkAssemblyVersion)</AssemblyVersion>
         <Version>$(MetalamaTestsDotNetSdkVersion)</Version>
     </PropertyGroup>
-
-    <!-- Versions of other dependencies are set in Directory.Packages.props. -->
-    <!-- See https://learn.microsoft.com/en-us/nuget/consume-packages/central-package-management. -->
 
 </Project>

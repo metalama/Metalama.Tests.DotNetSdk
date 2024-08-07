@@ -8,7 +8,7 @@ using System.Text.Json.Nodes;
 
 namespace BuildMetalamaTestsDotNetSdk.Commands;
 
-public class SetDotNetSdkVersionCommand : BaseCommand<SetDotNetSdkVersionCommandSettings> 
+internal class SetDotNetSdkVersionCommand : BaseCommand<SetDotNetSdkVersionCommandSettings> 
 {
     protected override bool ExecuteCore( BuildContext context, SetDotNetSdkVersionCommandSettings settings )
     {
