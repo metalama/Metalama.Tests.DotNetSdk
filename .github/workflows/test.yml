@@ -11,7 +11,7 @@ jobs:
       matrix:
         # os: [ubuntu-latest, windows-latest, macos-latest]
         os: [windows-latest]
-        dotnet-version: ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx']
+        dotnet-version: ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '9.0.x' ] # , '8.0.4xx', '9.0.1xx'] https://github.com/dotnet/source-build/discussions/4546
         project-type: ['console', 'maui'] # ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         configuration: [Debug]
         exclude:
@@ -45,7 +45,8 @@ jobs:
       id: setup-dotnet
       with:
         dotnet-version: ${{ matrix.dotnet-version }}
-        dotnet-quality: 'daily' # Use the daily build, so we find potential issues early.
+        # https://github.com/dotnet/source-build/discussions/4546
+        # dotnet-quality: 'daily' # Use the daily build, so we find potential issues early.
 
     - name: Set The .NET SDK Version
       shell: pwsh
