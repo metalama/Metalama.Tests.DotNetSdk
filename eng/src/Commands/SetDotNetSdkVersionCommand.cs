@@ -1,5 +1,6 @@
 ﻿// Copyright (c) SharpCrafters s.r.o. See the LICENSE.md file in the root directory of this repository root for details.
 
+using BuildMetalamaTestsDotNetSdk.Helpers;
 using PostSharp.Engineering.BuildTools;
 using PostSharp.Engineering.BuildTools.Build;
 using System.IO;
@@ -20,6 +21,8 @@ internal class SetDotNetSdkVersionCommand : BaseCommand<SetDotNetSdkVersionComma
         o!["sdk"]!["version"] = settings.Version;
         json = JsonSerializer.Serialize( o, new JsonSerializerOptions { WriteIndented = true } );
         File.WriteAllText( path, json );
+
+        DotNetInvocationHelper.Run( context, "", "--info" );
         
         context.Console.WriteSuccess( $"The .NET SDK version set to {settings.Version}." );
 

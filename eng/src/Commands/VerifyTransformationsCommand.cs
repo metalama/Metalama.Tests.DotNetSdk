@@ -22,9 +22,12 @@ internal class VerifyTransformationsCommand : BaseCommand<VerifyTransformationsC
 
         bool VerifyAssembly(string assemblyPath)
         {
-            var assemblyDirectory = Path.GetDirectoryName( assemblyPath );
-            var outputAssemblies = Directory.GetFiles( assemblyDirectory, "*.dll" );
-            var allAssemblies = runtimeAssemblies.Concat( outputAssemblies ).ToList();
+            var assemblyDirectory = Path.GetDirectoryName( assemblyPath )!;
+            var outputAssemblies = Directory.GetFiles( assemblyDirectory, "*.dll" ).ToList();
+            var outputAssemblyFileNames = outputAssemblies.Select(a => Path.GetFileName(a)).ToHashSet();
+
+            // Exclude assemblies copied to the output directory.
+            var allAssemblies = outputAssemblies.Concat( runtimeAssemblies.Where( a => !outputAssemblyFileNames.Contains( Path.GetFileName( a ) ) ) );
 
             var resolver = new PathAssemblyResolver( allAssemblies );
             using var context = new MetadataLoadContext( resolver );

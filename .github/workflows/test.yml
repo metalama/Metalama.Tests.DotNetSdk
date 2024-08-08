@@ -11,7 +11,7 @@ jobs:
       matrix:
         # os: [ubuntu-latest, windows-latest, macos-latest]
         os: [windows-latest]
-        dotnet-version: ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx'] #, '9.x']
+        dotnet-version: ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx']
         project-type: ['console', 'maui'] # ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         configuration: [Debug]
         exclude:
@@ -45,17 +45,18 @@ jobs:
       id: setup-dotnet
       with:
         dotnet-version: ${{ matrix.dotnet-version }}
+        dotnet-quality: 'daily' # Use the daily build, so we find potential issues early.
 
     - name: Set The .NET SDK Version
       shell: pwsh
       run: ./Build.ps1 set-sdk-version ${{ steps.setup-dotnet.outputs.dotnet-version }} --nologo
 
-    - name: Install Java SDK
+    - name: Install Java
       if: matrix.project-type == 'maui'
       uses: actions/setup-java@v4
       with:
         distribution: 'microsoft'
-        java-version: '21'
+        java-version: ${{ matrix.dotnet-version == '6.0.4xx' && '11' || '21' }} # error XA0030: Building with JDK version `21.0.2` is not supported. Please install JDK version `11.0`.
 
     - name: Install Other Prerequisities
       shell: pwsh
