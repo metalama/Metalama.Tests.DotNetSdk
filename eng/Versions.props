@@ -1,3 +1,4 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project>
 
     <!-- Set the default version of the current product -->
@@ -10,7 +11,7 @@
 
     <!-- Set versions of dependencies. -->
     <PropertyGroup>
-        <PostSharpEngineeringVersion>2023.2.115</PostSharpEngineeringVersion>
+        <PostSharpEngineeringVersion>2023.2.116</PostSharpEngineeringVersion>
     </PropertyGroup>
 
     <!-- Set the deafult versions of auto-updated dependencies -->
