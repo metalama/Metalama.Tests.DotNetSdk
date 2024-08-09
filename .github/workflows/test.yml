@@ -10,9 +10,10 @@ jobs:
     strategy:
       matrix:
         # os: [ubuntu-latest, windows-latest, macos-latest]
-        os: [windows-latest]
-        dotnet-version: ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx' ]
-        project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
+        # os: [windows-latest]
+        os: [ubuntu-latest]
+        dotnet-version: ['6.0.1xx'] #, '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx' ]
+        project-type: ['console'] #, 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         configuration: [Debug]
         exclude:
           - project-type: maui
@@ -34,10 +35,21 @@ jobs:
     #  METALAMA_DIAGNOSTICS: '{"logging": {"processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": true,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false},"trace": {"*": true},"stopLoggingAfterHours": 2.0},"debugging": {"processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": false,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false}},"crashDumps": {"processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": false,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false},"exceptionTypes": ["*"]},"profiling": {"kind": "performance","processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": false,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false}}}'
 
     steps:
+    # Needed only locally
+    - name: Install PowerShell
+      uses: cakhanif/action-install-powershell@v1
+
     - name: Checkout
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+
+    # Avoid issues with symlinks
+    - name: Copy EditorConfig
+      uses: canastro/copy-file-action@master
+      with:
+        source: "eng/style/.editorconfig"
+        target: ".editorconfig"
 
     - name: Install .NET For PostSharp.Engineering
       uses: actions/setup-dotnet@v4
