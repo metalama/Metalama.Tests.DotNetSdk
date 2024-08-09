@@ -21,10 +21,10 @@ internal class SetDotNetSdkVersionCommand : BaseCommand<SetDotNetSdkVersionComma
         o!["sdk"]!["version"] = settings.Version;
         json = JsonSerializer.Serialize( o, new JsonSerializerOptions { WriteIndented = true } );
         File.WriteAllText( path, json );
-
-        DotNetInvocationHelper.Run( context, "", "--info" );
         
         context.Console.WriteSuccess( $"The .NET SDK version set to {settings.Version}." );
+
+        DotNetInvocationHelper.Run( context, "", "--info" );
 
         return true;
     }

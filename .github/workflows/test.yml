@@ -45,8 +45,7 @@ jobs:
       id: setup-dotnet
       with:
         dotnet-version: ${{ matrix.dotnet-version }}
-        # https://github.com/dotnet/source-build/discussions/4546
-        # dotnet-quality: 'daily' # Use the daily build, so we find potential issues early.
+        dotnet-quality: 'daily' # Use the daily build, so we find potential issues early.
 
     - name: Set The .NET SDK Version
       shell: pwsh
