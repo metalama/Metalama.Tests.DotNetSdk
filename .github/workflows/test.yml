@@ -19,6 +19,10 @@ jobs:
             dotnet-version: 6.0.1xx
           - project-type: maui-blazor
             dotnet-version: 6.0.1xx
+          - project-type: blazor
+            dotnet-version: 6.0.1xx
+          - project-type: blazor
+            dotnet-version: 6.0.4xx
       fail-fast: false # Don't stop other jobs if one fails.
 
     runs-on: ${{ matrix.os }}  # For a list of available runner types, refer to
@@ -52,7 +56,7 @@ jobs:
       run: ./Build.ps1 set-sdk-version ${{ steps.setup-dotnet.outputs.dotnet-version }} --nologo
 
     - name: Install Java
-      if: matrix.project-type == 'maui'
+      if: matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor'
       uses: actions/setup-java@v4
       with:
         distribution: 'microsoft'
