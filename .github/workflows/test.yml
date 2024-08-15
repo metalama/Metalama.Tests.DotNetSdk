@@ -36,8 +36,8 @@ jobs:
 
     steps:
     # Needed only locally
-    - name: Install PowerShell
-      uses: cakhanif/action-install-powershell@v1
+    #- name: Install PowerShell
+    #  uses: cakhanif/action-install-powershell@v1
 
     - name: Checkout
       uses: actions/checkout@v4
