@@ -45,11 +45,12 @@ jobs:
         fetch-depth: 0
 
     # Avoid issues with symlinks
-    - name: Copy EditorConfig
-      uses: canastro/copy-file-action@master
-      with:
-        source: "eng/style/.editorconfig"
-        target: ".editorconfig"
+    # Needed only locally
+    #- name: Copy EditorConfig
+    #  uses: canastro/copy-file-action@master
+    #  with:
+    #    source: "eng/style/.editorconfig"
+    #    target: ".editorconfig"
 
     - name: Install .NET For PostSharp.Engineering
       uses: actions/setup-dotnet@v4
