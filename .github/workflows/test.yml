@@ -80,8 +80,11 @@ jobs:
       run: ./Build.ps1 install-prerequisities ${{ matrix.project-type }} --nologo
 
     - name: Extract .NET major and minor version
-        id: dotnet_major_minor
-        run: echo "::set-output name=major_minor::$(echo '${{ matrix.dotnet-version }}' | cut -d'.' -f1,2)"
+      id: dotnet_major_minor
+      run: |
+        version="${{ steps.get_dotnet_version.outputs.version }}"
+        major_minor=$(node -e "console.log('${{ steps.get_dotnet_version.outputs.version }}'.split('.').slice(0, 2).join('.'))")
+        echo "::set-output name=major_minor::$major_minor"
 
     - name: Set ref version for Assembly Locator
       if: steps.dotnet_major_minor.outputs.major_minor != '6.0'
