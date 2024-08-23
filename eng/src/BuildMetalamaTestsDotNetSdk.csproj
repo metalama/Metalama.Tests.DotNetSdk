@@ -13,6 +13,8 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="NuGet.Common" Version="6.11.0" />
+        <PackageReference Include="NuGet.Protocol" Version="6.11.0" />
         <PackageReference Include="PostSharp.Engineering.BuildTools" Version="$(PostSharpEngineeringVersion)" />
         <PackageReference Include="System.Reflection.MetadataLoadContext" Version="8.0.0" />
     </ItemGroup>

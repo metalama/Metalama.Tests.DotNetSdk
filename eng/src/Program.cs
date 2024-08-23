@@ -23,5 +23,6 @@ commandApp.Configure( c => c.AddCommand<SetDotNetSdkVersionCommand>( "set-sdk-ve
 commandApp.Configure( c => c.AddCommand<InstallPrerequisitiesCommand>( "install-prerequisities" ).WithData( product ) );
 commandApp.Configure( c => c.AddCommand<CreateProjectCommand>( "create-project" ).WithData( product ) );
 commandApp.Configure( c => c.AddCommand<VerifyTransformationsCommand>( "verify-transformations" ).WithData( product ) );
+commandApp.Configure( c => c.AddCommand<SetAssemblyLocatorRefVersionCommand>( "set-ref-version" ).WithData( product ) );
 
 return commandApp.Run( args );

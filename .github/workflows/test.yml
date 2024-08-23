@@ -79,6 +79,15 @@ jobs:
       shell: pwsh
       run: ./Build.ps1 install-prerequisities ${{ matrix.project-type }} --nologo
 
+    - name: Extract .NET major and minor version
+        id: dotnet_major_minor
+        run: echo "::set-output name=major_minor::$(echo '${{ matrix.dotnet-version }}' | cut -d'.' -f1,2)"
+
+    - name: Set ref version for Assembly Locator
+      if: steps.dotnet_major_minor.outputs.major_minor != '6.0'
+      shell: pwsh
+      run: ./Build.ps1 set-ref-version --nologo
+
     - name: Create Project
       shell: pwsh
       run: ./Build.ps1 create-project ${{ matrix.project-type }} --nologo
