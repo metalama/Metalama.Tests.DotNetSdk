@@ -81,10 +81,11 @@ jobs:
 
     - name: Extract .NET major and minor version
       id: dotnet_major_minor
+      shell: pwsh
       run: |
-        version="${{ steps.get_dotnet_version.outputs.version }}"
-        major_minor=$(node -e "console.log('${{ steps.get_dotnet_version.outputs.version }}'.split('.').slice(0, 2).join('.'))")
-        echo "::set-output name=major_minor::$major_minor"
+        $version = ${{ matrix.dotnet-version }}
+        $major_minor = $version -split '\.' | Select-Object -First 2 -join '.'
+        echo "##[set-output name=major_minor;]$major_minor"
 
     - name: Set ref version for Assembly Locator
       if: steps.dotnet_major_minor.outputs.major_minor != '6.0'
