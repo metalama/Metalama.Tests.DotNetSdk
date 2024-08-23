@@ -2,6 +2,7 @@
 
 using BuildMetalamaTestsDotNetSdk.Helpers;
 using JetBrains.Annotations;
+using NuGet.Versioning;
 using PostSharp.Engineering.BuildTools.Utilities;
 using Spectre.Console.Cli;
 using System;
@@ -14,25 +15,40 @@ namespace BuildMetalamaTestsDotNetSdk.Commands;
 
 // https://github.com/dotnet/sdk/issues/42638
 [UsedImplicitly]
-internal class SetAssemblyLocatorRefVersionCommand : AsyncCommand
+internal class SetAssemblyLocatorRefVersionCommand : AsyncCommand<SetAssemblyLocatorRefVersionCommandSettings>
 {
-    public override async Task<int> ExecuteAsync( CommandContext context )
+    public override async Task<int> ExecuteAsync( CommandContext context,
+        SetAssemblyLocatorRefVersionCommandSettings settings )
     {
-        var cts = new CancellationTokenSource();
+        var console = new ConsoleHelper();
         
-        Console.CancelKeyPress += ( s, e ) =>
+        // This version has to correspond to the version that AssemblyLocator uses.
+        const int targetMajor = 6;
+        const int targetMinor = 0;
+        
+        var sdkVersion = NuGetVersion.Parse( settings.SdkVersion );
+        
+        if (sdkVersion is { Major: targetMajor, Minor: targetMinor })
+        {
+            console.WriteMessage(
+                $"No need to set the version of 'Microsoft.NETCore.App.Ref' package since we're using .NET {targetMajor}.{targetMinor} SDK." );
+
+            return 0;
+        }
+        
+        var cts = new CancellationTokenSource();
+
+        Console.CancelKeyPress += ( _, e ) =>
         {
             Console.WriteLine( "Canceling..." );
             cts.Cancel();
             e.Cancel = true;
         };
-        
-        var console = new ConsoleHelper();
 
         var versions = await NuGetHelper.GetVersionsAsync( console, "Microsoft.NETCore.App.Ref", false, cts.Token );
 
-        var version = versions.Where( v => v is { Major: 6, Minor: 0 } ).MaxBy( v => v )?.ToString();
-        
+        var version = versions.Where( v => v is { Major: targetMajor, Minor: targetMinor } ).MaxBy( v => v )?.ToString();
+
         if ( version == null )
         {
             console.WriteError( "Failed to get the version of 'Microsoft.NETCore.App.Ref' package." );
@@ -44,21 +60,22 @@ internal class SetAssemblyLocatorRefVersionCommand : AsyncCommand
         Directory.CreateDirectory( directory );
 
         var file = Path.Combine( directory, "Directory.Build.props" );
-        
-        console.WriteMessage( $"Setting the version of 'Microsoft.NETCore.App.Ref' package to '{version}' in '{file}'." );
+
+        console.WriteMessage(
+            $"Setting the version of 'Microsoft.NETCore.App.Ref' package to '{version}' in '{file}'." );
 
         await File.WriteAllTextAsync( file, @$"<Project>
   <PropertyGroup>
-    <RuntimeFrameworkVersion Condition=""'$(TargetFramework)' == 'net6.0'"">{version}</RuntimeFrameworkVersion>
+    <RuntimeFrameworkVersion Condition=""'$(TargetFramework)' == 'net{targetMajor}.{targetMinor}'"">{version}</RuntimeFrameworkVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <KnownFrameworkReference  Update=""@(KnownFrameworkReference)"">
-      <TargetingPackVersion Condition=""'%(TargetFramework)' == 'net6.0'"">{version}</TargetingPackVersion >
+      <TargetingPackVersion Condition=""'%(TargetFramework)' == 'net{targetMajor}.{targetMinor}'"">{version}</TargetingPackVersion >
     </KnownFrameworkReference >
   </ItemGroup>
 </Project>", cts.Token );
-        
+
         return 0;
     }
 }
