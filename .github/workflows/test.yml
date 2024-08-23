@@ -83,7 +83,7 @@ jobs:
       id: dotnet_major_minor
       shell: pwsh
       run: |
-        $version = ${{ matrix.dotnet-version }}
+        $version = '${{ matrix.dotnet-version }}'
         $major_minor = $version -split '\.' | Select-Object -First 2 -join '.'
         echo "##[set-output name=major_minor;]$major_minor"
 
