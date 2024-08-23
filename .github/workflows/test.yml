@@ -84,7 +84,8 @@ jobs:
       shell: pwsh
       run: |
         $version = '${{ matrix.dotnet-version }}'
-        $major_minor = $version -split '\.' | Select-Object -First 2 -join '.'
+        $versionParts = $version -split '\.'
+        $major_minor = "$($versionParts[0]).$($versionParts[1])"
         echo "##[set-output name=major_minor;]$major_minor"
 
     - name: Set ref version for Assembly Locator
