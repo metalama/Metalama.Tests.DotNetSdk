@@ -89,7 +89,8 @@ jobs:
 
     - name: Create Project
       shell: pwsh
-      run: ./Build.ps1 create-project ${{ matrix.project-type }} --nologo
+      run: dotnet new console -o src/Metalama.Tests.DotNetSdk -n Metalama.Tests.DotNetSdk --no-restore
+      # run: ./Build.ps1 create-project ${{ matrix.project-type }} --nologo
 
     - name: Build
       shell: pwsh
