@@ -4,6 +4,7 @@ using BuildMetalamaTestsDotNetSdk.Helpers;
 using JetBrains.Annotations;
 using PostSharp.Engineering.BuildTools;
 using PostSharp.Engineering.BuildTools.Build;
+using System;
 
 namespace BuildMetalamaTestsDotNetSdk.Commands;
 
@@ -18,18 +19,48 @@ internal class InstallPrerequisitiesCommand : BaseCommand<InstallPrerequisitiesC
         {
             case "maui":
             case "maui-blazor":
-                if ( !InstallWorkload( context, "maui" ) )
+                if ( !InstallMaui( context ) )
                 {
                     return false;
                 }
 
                 break;
             default:
-                context.Console.WriteImportantMessage( $"'{settings.ProjectType}' project type requires no prerequisities." );
+                context.Console.WriteImportantMessage( $"'{settings.ProjectType}' project type requires no prerequisites." );
                 break;
         }
 
         context.Console.WriteSuccess( $"Prerequisites for '{settings.ProjectType}' project type installed." );
+
+        return true;
+    }
+
+    private static bool InstallMaui( BuildContext context )
+    {
+        if ( OperatingSystem.IsWindows() )
+        {
+            if ( !InstallWorkload( context, "maui" ) )
+            {
+                return false;
+            }
+        }
+        else
+        {
+            if ( !InstallWorkload( context, "maui-windows" ) )
+            {
+                return false;
+            }
+            
+            if ( !InstallWorkload( context, "maui-android" ) )
+            {
+                return false;
+            }
+            
+            if ( !InstallWorkload( context, "maui-tizen" ) )
+            {
+                return false;
+            }
+        }
 
         return true;
     }

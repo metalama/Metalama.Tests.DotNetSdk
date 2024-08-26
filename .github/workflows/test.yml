@@ -24,6 +24,14 @@ jobs:
             dotnet-version: 6.0.1xx
           - project-type: blazor
             dotnet-version: 6.0.4xx
+          - project-type: winforms
+            os: ubuntu-latest
+          - project-type: winforms
+            os: macos-latest
+          - project-type: wpf
+            os: ubuntu-latest
+          - project-type: wpf
+            os: macos-latest
       fail-fast: false # Don't stop other jobs if one fails.
 
     runs-on: ${{ matrix.os }}  # For a list of available runner types, refer to
