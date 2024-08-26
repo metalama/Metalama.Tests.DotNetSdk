@@ -59,22 +59,27 @@ internal class SetAssemblyLocatorRefVersionCommand : AsyncCommand<SetAssemblyLoc
 
         Directory.CreateDirectory( directory );
 
-        var file = Path.Combine( directory, "Directory.Build.props" );
+        var file = Path.Combine( directory, "Metalama.AssemblyLocator.Build.props" );
 
         console.WriteMessage(
-            $"Setting the version of 'Microsoft.NETCore.App.Ref' package to '{version}' in '{file}'." );
+            $"Setting the version of AssemblyLocator's targeting packages of 'net{targetMajor}.{targetMinor}' target framework to '{version}' in '{file}'." );
 
-        await File.WriteAllTextAsync( file, @$"<Project>
-  <PropertyGroup>
-    <RuntimeFrameworkVersion Condition=""'$(TargetFramework)' == 'net{targetMajor}.{targetMinor}'"">{version}</RuntimeFrameworkVersion>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <KnownFrameworkReference  Update=""@(KnownFrameworkReference)"">
-      <TargetingPackVersion Condition=""'%(TargetFramework)' == 'net{targetMajor}.{targetMinor}'"">{version}</TargetingPackVersion >
-    </KnownFrameworkReference >
-  </ItemGroup>
-</Project>", cts.Token );
+        await File.WriteAllTextAsync( file, $"""
+<Project>
+  <Target Name="_SetRuntimeVersion" BeforeTargets="ProcessFrameworkReferences">
+    <ItemGroup>
+      <KnownFrameworkReference Update="@(KnownFrameworkReference)">
+        <LatestRuntimeFrameworkVersion Condition="'%(TargetFramework)' == 'net{targetMajor}.{targetMinor}'">{version}</LatestRuntimeFrameworkVersion>
+        <TargetingPackVersion Condition="'%(TargetFramework)' == 'net{targetMajor}.{targetMinor}'">{version}</TargetingPackVersion >
+      </KnownFrameworkReference>
+      <KnownAppHostPack Update="@(KnownAppHostPack)">
+        <AppHostPackVersion Condition="'%(TargetFramework)' == 'net{targetMajor}.{targetMinor}'">{version}</AppHostPackVersion>
+      </KnownAppHostPack>
+    </ItemGroup>
+    <Warning Text="Targeting packages versions of 'net{targetMajor}.{targetMinor}' target framework set to '{version}'." />
+  </Target>
+</Project>
+""", cts.Token );
 
         return 0;
     }

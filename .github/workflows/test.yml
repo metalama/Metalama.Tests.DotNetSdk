@@ -83,6 +83,10 @@ jobs:
       shell: pwsh
       run: ./Build.ps1 set-ref-version ${{ steps.setup-dotnet.outputs.dotnet-version }} --nologo
 
+    - name: Set dependencies
+      shell: pwsh
+      run: ./Build.ps1 dependencies set BuildServer 2 --branch topic/2024.2/story-35002-sdk-tests --nologo
+
     - name: Create Project
       shell: pwsh
       run: ./Build.ps1 create-project ${{ matrix.project-type }} --nologo
