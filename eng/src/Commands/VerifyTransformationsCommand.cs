@@ -1,6 +1,7 @@
 ﻿// Copyright (c) SharpCrafters s.r.o. See the LICENSE.md file in the root directory of this repository root for details.
 
 using BuildMetalamaTestsDotNetSdk.Helpers;
+using JetBrains.Annotations;
 using PostSharp.Engineering.BuildTools;
 using PostSharp.Engineering.BuildTools.Build;
 using System.IO;
@@ -10,6 +11,7 @@ using System.Runtime.InteropServices;
 
 namespace BuildMetalamaTestsDotNetSdk.Commands;
 
+[UsedImplicitly]
 internal class VerifyTransformationsCommand : BaseCommand<VerifyTransformationsCommandSettings>
 {
     protected override bool ExecuteCore( BuildContext context, VerifyTransformationsCommandSettings settings )
