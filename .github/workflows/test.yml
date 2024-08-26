@@ -12,7 +12,7 @@ jobs:
         # os: [ubuntu-latest, windows-latest, macos-latest]
         # os: [windows-latest]
         os: [ubuntu-latest]
-        dotnet-version: ['8.0.4.xx'] # ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx' ]
+        dotnet-version: ['8.0.4xx'] # ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx' ]
         project-type: ['maui', 'maui-blazor', 'wpf', 'winforms'] # ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         configuration: [Debug]
         exclude:
