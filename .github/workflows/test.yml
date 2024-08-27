@@ -103,10 +103,12 @@ jobs:
       shell: pwsh
       run: ./Build.ps1 build --nologo
 
-    - name: Show Build Output
-      shell: pwsh
-      run: Get-Content build_output.log
+    - name: Upload build output log
       if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: build_output_log
+        path: build_output.log
 
     - name: Verify Transformations
       shell: pwsh
