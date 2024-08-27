@@ -50,10 +50,18 @@ internal class InstallPrerequisitiesCommand : BaseCommand<InstallPrerequisitiesC
             {
                 return false;
             }
-            
-            if ( !InstallWorkload( context, "maui-tizen" ) )
+
+            if ( OperatingSystem.IsMacOS() )
             {
-                return false;
+                if ( !InstallWorkload( context, "maui-ios" ) )
+                {
+                    return false;
+                }
+                
+                if ( !InstallWorkload( context, "maui-maccatalyst" ) )
+                {
+                    return false;
+                }
             }
         }
 

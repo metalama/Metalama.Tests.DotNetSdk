@@ -17,7 +17,7 @@ internal class CreateProjectCommand : BaseCommand<CreateProjectCommandSettings>
     {
         context.Console.WriteHeading( $"Creating new '{settings.ProjectType}' project." );
 
-        // We disable the implicit restore so we don't need to prepare the version file and download artifacts beforehand.
+        // We disable the implicit restore, so we don't need to prepare the version file and download artifacts beforehand.
         var noRestoreFlag = settings.ProjectType switch
         {
             "maui" => "", // MAUI template doesn't support this flag, but it doesn't do implicit restore either.
@@ -30,17 +30,32 @@ internal class CreateProjectCommand : BaseCommand<CreateProjectCommandSettings>
             return false;
         }
 
-        if ( settings.ProjectType == "maui" || settings.ProjectType == "maui-blazor" )
+        // Building Mac apps is not supported on Linux.
+        if ( settings.ProjectType is "maui" or "maui-blazor" && OperatingSystem.IsLinux() )
         {
-            var projectFilePath = Path.Combine( context.RepoDirectory, ProjectInfo.ProjectDirectory, $"{ProjectInfo.ProjectName}.csproj" );
+            if ( !DisableMauiMac() )
+            {
+                return false;
+            }
+        }
+
+        context.Console.WriteSuccess( $"New '{settings.ProjectType}' project created." );
+
+        return true;
+
+        bool DisableMauiMac()
+        {
+            var projectFilePath = Path.Combine( context.RepoDirectory, ProjectInfo.ProjectDirectory,
+                $"{ProjectInfo.ProjectName}.csproj" );
             var project = File.ReadAllText( projectFilePath );
 
-            var targetFramework = project.Split( '\n' ).First( l => l.Contains( "<TargetFrameworks>", StringComparison.Ordinal ) )
+            var targetFramework = project.Split( '\n' )
+                .First( l => l.Contains( "<TargetFrameworks>", StringComparison.Ordinal ) )
                 .Replace( "<TargetFrameworks>", "", StringComparison.Ordinal )
                 .Replace( "</TargetFrameworks>", "", StringComparison.Ordinal ).Trim().Split( ';' ).First().Split( '-' )
                 .First();
-            
-            void ReplaceInProject( string original, string replacement )
+
+            bool ReplaceInProject( string original, string replacement )
             {
                 context.Console.WriteMessage( $"Replacing '{original}' with '{replacement}' in the project." );
                 var replacedProject = project.Replace( original, replacement, StringComparison.Ordinal );
@@ -48,29 +63,26 @@ internal class CreateProjectCommand : BaseCommand<CreateProjectCommandSettings>
                 if ( replacedProject == project )
                 {
                     context.Console.WriteError( $"'{original}' not found in the project." );
+
+                    return false;
                 }
 
                 project = replacedProject;
+
+                return true;
             }
-            
-            // Building Mac apps is not supported on Linux.
-            if ( OperatingSystem.IsLinux() )
-            {
-                ReplaceInProject(
+
+
+            if ( !ReplaceInProject(
                     $"<TargetFrameworks>{targetFramework}-android;{targetFramework}-ios;{targetFramework}-maccatalyst</TargetFrameworks>",
-                    $"<TargetFrameworks>{targetFramework}-android</TargetFrameworks>" );
+                    $"<TargetFrameworks>{targetFramework}-android</TargetFrameworks>" ) )
+            {
+                return false;
             }
 
-            // Enable Tizen.
-            ReplaceInProject(
-                $"<!-- <TargetFrameworks>$(TargetFrameworks);{targetFramework}-tizen</TargetFrameworks> -->",
-                $"<TargetFrameworks>$(TargetFrameworks);{targetFramework}-tizen</TargetFrameworks>" );
-            
             File.WriteAllText( projectFilePath, project );
+
+            return true;
         }
-
-        context.Console.WriteSuccess( $"New '{settings.ProjectType}' project created." );
-
-        return true;
     }
 }
