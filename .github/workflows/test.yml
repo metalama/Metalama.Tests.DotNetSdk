@@ -84,6 +84,10 @@ jobs:
         distribution: 'microsoft'
         java-version: ${{ matrix.dotnet-version == '6.0.4xx' && '11' || '21' }} # error XA0030: Building with JDK version `21.0.2` is not supported. Please install JDK version `11.0`.
 
+    - name: Install Android SDK
+      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'ubuntu-latest'
+      uses: android-actions/setup-android@v3
+
     - name: Install Other Prerequisities
       shell: pwsh
       run: ./Build.ps1 install-prerequisities ${{ matrix.project-type }} --nologo
