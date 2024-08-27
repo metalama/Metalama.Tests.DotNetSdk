@@ -32,7 +32,7 @@ internal class CreateProjectCommand : BaseCommand<CreateProjectCommandSettings>
 
         if ( settings.ProjectType == "maui" || settings.ProjectType == "maui-blazor" )
         {
-            var projectFilePath = Path.Combine( ProjectInfo.ProjectDirectory, $"{ProjectInfo.ProjectName}.csproj" );
+            var projectFilePath = Path.Combine( context.RepoDirectory, ProjectInfo.ProjectDirectory, $"{ProjectInfo.ProjectName}.csproj" );
             var project = File.ReadAllText( projectFilePath );
 
             var targetFramework = project.Split( '\n' ).First( l => l.Contains( "<TargetFrameworks>", StringComparison.Ordinal ) )
