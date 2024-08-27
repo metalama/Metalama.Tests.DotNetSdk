@@ -106,6 +106,7 @@ jobs:
     - name: Show Build Output
       shell: pwsh
       run: Get-Content build_output.log
+      if: always()
 
     - name: Verify Transformations
       shell: pwsh
