@@ -4,6 +4,9 @@ using BuildMetalamaTestsDotNetSdk.Helpers;
 using JetBrains.Annotations;
 using PostSharp.Engineering.BuildTools;
 using PostSharp.Engineering.BuildTools.Build;
+using System;
+using System.IO;
+using System.Linq;
 
 namespace BuildMetalamaTestsDotNetSdk.Commands;
 
@@ -25,6 +28,45 @@ internal class CreateProjectCommand : BaseCommand<CreateProjectCommandSettings>
         if ( !DotNetInvocationHelper.Run( context, "new", $"{settings.ProjectType} -o {ProjectInfo.ProjectDirectory} -n {ProjectInfo.ProjectName}{noRestoreFlag}" ) )
         {
             return false;
+        }
+
+        if ( settings.ProjectType == "maui" || settings.ProjectType == "maui-blazor" )
+        {
+            var projectFilePath = Path.Combine( ProjectInfo.ProjectDirectory, $"{ProjectInfo.ProjectName}.csproj" );
+            var project = File.ReadAllText( projectFilePath );
+
+            var targetFramework = project.Split( '\n' ).First( l => l.Contains( "<TargetFrameworks>", StringComparison.Ordinal ) )
+                .Replace( "<TargetFrameworks>", "", StringComparison.Ordinal )
+                .Replace( "</TargetFrameworks>", "", StringComparison.Ordinal ).Trim().Split( ';' ).First().Split( '-' )
+                .First();
+            
+            void ReplaceInProject( string original, string replacement )
+            {
+                context.Console.WriteMessage( $"Replacing '{original}' with '{replacement}' in the project." );
+                var replacedProject = project.Replace( original, replacement, StringComparison.Ordinal );
+
+                if ( replacedProject == project )
+                {
+                    context.Console.WriteError( $"'{original}' not found in the project." );
+                }
+
+                project = replacedProject;
+            }
+            
+            // Building Mac apps is not supported on Linux.
+            if ( OperatingSystem.IsLinux() )
+            {
+                ReplaceInProject(
+                    $"<TargetFrameworks>{targetFramework}-android;{targetFramework}-ios;{targetFramework}-maccatalyst</TargetFrameworks>",
+                    $"<TargetFrameworks>{targetFramework}-android</TargetFrameworks>" );
+            }
+
+            // Enable Tizen.
+            ReplaceInProject(
+                $"<!-- <TargetFrameworks>$(TargetFrameworks);{targetFramework}-tizen</TargetFrameworks> -->",
+                $"<TargetFrameworks>$(TargetFrameworks);{targetFramework}-tizen</TargetFrameworks>" );
+            
+            File.WriteAllText( projectFilePath, project );
         }
 
         context.Console.WriteSuccess( $"New '{settings.ProjectType}' project created." );

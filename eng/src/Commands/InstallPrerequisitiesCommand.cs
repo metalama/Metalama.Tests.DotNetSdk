@@ -46,11 +46,6 @@ internal class InstallPrerequisitiesCommand : BaseCommand<InstallPrerequisitiesC
         }
         else
         {
-            if ( !InstallWorkload( context, "maui-windows" ) )
-            {
-                return false;
-            }
-            
             if ( !InstallWorkload( context, "maui-android" ) )
             {
                 return false;
