@@ -101,7 +101,7 @@ jobs:
 
     - name: Build
       shell: pwsh
-      run: ./Build.ps1 build --nologo *>&1 | Tee-Object -FilePath build_output.log
+      run: ./Build.ps1 build --nologo
 
     - name: Show Build Output
       shell: pwsh
