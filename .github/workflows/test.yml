@@ -8,6 +8,7 @@ jobs:
   build:
 
     # MAUI fails on .NET 9 RC2 at the moment: https://github.com/dotnet/sdk/issues/43049
+    # Blazor WASM fails on .NET 9 RC2 at the moment: https://github.com/dotnet/sdk/issues/43050
     
 
     strategy:
