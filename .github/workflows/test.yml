@@ -7,31 +7,37 @@ jobs:
 
   build:
 
+    # MAUI fails on .NET 9 RC2 at the moment: https://github.com/dotnet/sdk/issues/43049
+    
+
     strategy:
       matrix:
-        # os: [ubuntu-latest, windows-latest, macos-latest]
-        # os: [windows-latest]
-        # os: [ubuntu-latest]
-        os: [ubuntu-latest, macos-latest]
-        dotnet-version: ['6.0.4xx'] # ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx' ]
-        project-type: ['maui', 'maui-blazor'] # ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        dotnet-version: ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx' ]
+        project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         configuration: [Debug]
         exclude:
-          - project-type: maui
+          - project-type: maui # N/A
             dotnet-version: 6.0.1xx
-          - project-type: maui-blazor
+          - project-type: maui-blazor # N/A
             dotnet-version: 6.0.1xx
-          - project-type: blazor
-            dotnet-version: 6.0.1xx
-          - project-type: blazor
+          - project-type: maui # error XA5207: Could not find android.jar for API level 31. - Won't solve - out of support.
             dotnet-version: 6.0.4xx
-          - project-type: winforms
-            os: ubuntu-latest
-          - project-type: winforms
             os: macos-latest
-          - project-type: wpf
+          - project-type: maui-blazor # error XA5207: Could not find android.jar for API level 31. - Won't solve - out of support.
+            dotnet-version: 6.0.4xx
+            os: macos-latest
+          - project-type: blazor # N/A
+            dotnet-version: 6.0.1xx
+          - project-type: blazor # N/A
+            dotnet-version: 6.0.4xx
+          - project-type: winforms # N/A
             os: ubuntu-latest
-          - project-type: wpf
+          - project-type: winforms # N/A
+            os: macos-latest
+          - project-type: wpf # N/A
+            os: ubuntu-latest
+          - project-type: wpf # N/A
             os: macos-latest
       fail-fast: false # Don't stop other jobs if one fails.
 
