@@ -9,7 +9,6 @@ jobs:
 
     # MAUI fails on .NET 9 RC2 at the moment: https://github.com/dotnet/sdk/issues/43049
     # Blazor WASM fails on .NET 9 RC2 at the moment: https://github.com/dotnet/sdk/issues/43050
-    
 
     strategy:
       matrix:
@@ -41,6 +40,8 @@ jobs:
           - project-type: wpf # N/A
             os: macos-latest
       fail-fast: false # Don't stop other jobs if one fails.
+
+    timeout-minutes: 60
 
     runs-on: ${{ matrix.os }}  # For a list of available runner types, refer to
                                # https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on
