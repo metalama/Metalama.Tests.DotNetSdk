@@ -14,8 +14,8 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        dotnet-version: ['8.0.4xx'] # ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx' ]
-        project-type: ['maui'] # ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
+        dotnet-version: ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx' ]
+        project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         configuration: [Debug]
         exclude:
           - project-type: maui # N/A
@@ -102,7 +102,7 @@ jobs:
     - name: Install .NET Workloads
       if: matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor'
       shell: pwsh
-      run: dotnet workload install ${{ matrix.os == 'windows-latest' && 'maui' ||  'maui-android' }}${{ matrix.os == 'macos-latest' && '&& dotnet workload install maui-ios && dotnet workload install maui-maccatalyst' ||  '' }}
+      run: dotnet workload install ${{ matrix.os == 'windows-latest' && 'maui' ||  'maui-android' }}${{ matrix.os == 'macos-latest' && ' && dotnet workload install maui-ios && dotnet workload install maui-maccatalyst' ||  '' }}
 
     - name: Set ref version for Assembly Locator
       shell: pwsh
