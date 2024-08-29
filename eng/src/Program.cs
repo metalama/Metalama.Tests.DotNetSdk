@@ -16,9 +16,10 @@ var product = new Product( MetalamaDependencies.DotNetSdkTests )
 
 var app = new EngineeringApp( product );
 
-app.Configure( c => c.AddCommand<SetDotNetSdkVersionCommand>( "set-sdk-version" ).WithData( product ) );
-app.Configure( c => c.AddCommand<CreateProjectCommand>( "create-project" ).WithData( product ) );
-app.Configure( c => c.AddCommand<VerifyTransformationsCommand>( "verify-transformations" ).WithData( product ) );
-app.Configure( c => c.AddCommand<SetAssemblyLocatorRefVersionCommand>( "set-ref-version" ).WithData( product ) );
+var data = new BaseCommandData( product );
+app.Configure( c => c.AddCommand<SetDotNetSdkVersionCommand>( "set-sdk-version" ).WithData( data ) );
+app.Configure( c => c.AddCommand<CreateProjectCommand>( "create-project" ).WithData( data ) );
+app.Configure( c => c.AddCommand<VerifyTransformationsCommand>( "verify-transformations" ).WithData( data ) );
+app.Configure( c => c.AddCommand<SetAssemblyLocatorRefVersionCommand>( "set-ref-version" ).WithData( data ) );
 
 return app.Run( args );
