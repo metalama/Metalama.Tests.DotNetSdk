@@ -13,9 +13,9 @@ jobs:
 
     strategy:
       matrix:
-        os: ['windows-latest'] # [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         dotnet-version: ['8.0.4xx'] # ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx' ]
-        project-type: ['console'] # ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
+        project-type: ['maui'] # ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         configuration: [Debug]
         exclude:
           - project-type: maui # N/A
@@ -99,9 +99,10 @@ jobs:
       with:
         cmdline-tools-version: ${{ matrix.dotnet-version == '6.0.4xx' && '9862592' || '10406996' }} # Based on the Java version installed above. See https://github.com/android-actions/setup-android?tab=readme-ov-file#sdk-version-selection
 
-    - name: Install Other Prerequisities
+    - name: Install .NET Workloads
+      if: matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor'
       shell: pwsh
-      run: ./Build.ps1 install-prerequisities ${{ matrix.project-type }} --nologo
+      run: dotnet workload install ${{ matrix.os == 'windows-latest' && 'maui' ||  'maui-android' }}${{ matrix.os == 'macos-latest' && '&& dotnet workload install maui-ios && dotnet workload install maui-maccatalyst' ||  '' }}
 
     - name: Set ref version for Assembly Locator
       shell: pwsh

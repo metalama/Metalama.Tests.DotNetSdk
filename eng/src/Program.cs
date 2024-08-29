@@ -6,7 +6,6 @@ using PostSharp.Engineering.BuildTools;
 using PostSharp.Engineering.BuildTools.Build.Model;
 using PostSharp.Engineering.BuildTools.Build.Solutions;
 using PostSharp.Engineering.BuildTools.Dependencies.Definitions;
-using Spectre.Console.Cli;
 using MetalamaDependencies = PostSharp.Engineering.BuildTools.Dependencies.Definitions.MetalamaDependencies.V2024_2;
 
 var product = new Product( MetalamaDependencies.DotNetSdkTests )
@@ -15,14 +14,11 @@ var product = new Product( MetalamaDependencies.DotNetSdkTests )
     Dependencies = [DevelopmentDependencies.PostSharpEngineering, MetalamaDependencies.Metalama]
 };
 
-var commandApp = new CommandApp();
+var app = new EngineeringApp( product );
 
-commandApp.AddProductCommands( product );
+app.Configure( c => c.AddCommand<SetDotNetSdkVersionCommand>( "set-sdk-version" ).WithData( product ) );
+app.Configure( c => c.AddCommand<CreateProjectCommand>( "create-project" ).WithData( product ) );
+app.Configure( c => c.AddCommand<VerifyTransformationsCommand>( "verify-transformations" ).WithData( product ) );
+app.Configure( c => c.AddCommand<SetAssemblyLocatorRefVersionCommand>( "set-ref-version" ).WithData( product ) );
 
-commandApp.Configure( c => c.AddCommand<SetDotNetSdkVersionCommand>( "set-sdk-version" ).WithData( product ) );
-commandApp.Configure( c => c.AddCommand<InstallPrerequisitiesCommand>( "install-prerequisities" ).WithData( product ) );
-commandApp.Configure( c => c.AddCommand<CreateProjectCommand>( "create-project" ).WithData( product ) );
-commandApp.Configure( c => c.AddCommand<VerifyTransformationsCommand>( "verify-transformations" ).WithData( product ) );
-commandApp.Configure( c => c.AddCommand<SetAssemblyLocatorRefVersionCommand>( "set-ref-version" ).WithData( product ) );
-
-return commandApp.Run( args );
+return app.Run( args );
