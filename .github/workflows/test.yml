@@ -8,13 +8,12 @@ jobs:
   build:
 
     # MAUI fails on .NET 9 RC2 at the moment: https://github.com/dotnet/sdk/issues/43049
-    # Blazor WASM fails on .NET 9 RC2 at the moment: https://github.com/dotnet/sdk/issues/43050
 
     strategy:
       matrix:
-        os: [ubuntu-latest] # [ubuntu-latest, windows-latest, macos-latest]
-        dotnet-version: ['9.0.1xx'] # ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx' ]
-        project-type: ['console', 'blazorwasm'] # ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        dotnet-version: ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx' ]
+        project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         configuration: [Debug]
         exclude:
           - project-type: maui # N/A
