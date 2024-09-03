@@ -12,9 +12,9 @@ jobs:
 
     strategy:
       matrix:
-        os: [windows-latest] # [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest] # [ubuntu-latest, windows-latest, macos-latest]
         dotnet-version: ['9.0.1xx'] # ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx' ]
-        project-type: ['console', 'maui', 'maui-blazor'] # ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
+        project-type: ['console', 'blazorwasm'] # ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         configuration: [Debug]
         exclude:
           - project-type: maui # N/A
@@ -101,7 +101,7 @@ jobs:
         cmdline-tools-version: ${{ matrix.dotnet-version == '6.0.4xx' && '9862592' || '10406996' }} # Based on the Java version installed above. See https://github.com/android-actions/setup-android?tab=readme-ov-file#sdk-version-selection
 
     - name: Add NuGet Feed # https://github.com/dotnet/sdk/issues/43050 TODO: Remove after .NET 9 GA
-      if: matrix.dotnet-version == '9.0.1xx' && (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor')
+      if: matrix.dotnet-version == '9.0.1xx' && matrix.project-type == 'blazorwasm'
       shell: pwsh
       run: dotnet new nugetconfig && dotnet nuget add source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json -n dotnet9 --configfile ./nuget.config
 
