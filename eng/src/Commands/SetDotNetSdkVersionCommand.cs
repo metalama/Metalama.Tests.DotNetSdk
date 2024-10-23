@@ -19,9 +19,13 @@ internal class SetDotNetSdkVersionCommand : BaseCommand<SetDotNetSdkVersionComma
         context.Console.WriteHeading( $"Setting the .NET SDK version to {settings.Version}." );
         
         var versionParts = settings.Version.Split( '-' );
-        
-        // On Linux, the dotnet-install.ps1 returns a version with "-servicing.<build>" suffix, but the SDK version is without it.
-        var version = versionParts.Length > 1 && versionParts[1].StartsWith( "servicing", StringComparison.Ordinal )
+
+        var version = versionParts.Length > 1 && (
+            // On Linux, the dotnet-install.ps1 returns a version with "-servicing.<build>" suffix, but the SDK version is without it.
+            versionParts[1].StartsWith( "servicing", StringComparison.Ordinal )
+
+            // On Linux, the dotnet-install.ps1 returns a version with "-rtm.<build>" suffix, but the SDK version is without it.
+            || versionParts[1].StartsWith( "rtm", StringComparison.Ordinal ))
             ? versionParts[0]
             : settings.Version;
 
