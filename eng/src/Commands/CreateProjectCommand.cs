@@ -25,7 +25,14 @@ internal class CreateProjectCommand : BaseCommand<CreateProjectCommandSettings>
             _ => " --no-restore"
         };
 
-        if ( !DotNetInvocationHelper.Run( context, "new", $"{settings.ProjectType} -o {ProjectInfo.ProjectDirectory} -n {ProjectInfo.ProjectName}{noRestoreFlag}" ) )
+        var executable = "dotnet";
+        var command = "new";
+        var arguments =
+            $"{settings.ProjectType} -o {ProjectInfo.ProjectDirectory} -n {ProjectInfo.ProjectName}{noRestoreFlag}";
+        
+        Console.WriteLine($"{executable} {command} {arguments}");
+
+        if ( !DotNetInvocationHelper.Run( context, command, arguments ) )
         {
             return false;
         }
