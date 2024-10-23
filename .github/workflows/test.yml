@@ -11,9 +11,9 @@ jobs:
 
     strategy:
       matrix:
-        os: [macos-15] # [ubuntu-latest, windows-latest, macos-15] # Change macos-15 to macos-latest as soon as macos-15 get out of preview.
-        dotnet-version: ['8.0.4xx' ] # ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx' ]
-        project-type: ['winforms'] # ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
+        os: [macos-15] # [ubuntu-latest, windows-latest, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
+        dotnet-version: ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx' ]
+        project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         configuration: [Debug]
         exclude:
           - project-type: maui # N/A
@@ -22,10 +22,10 @@ jobs:
             dotnet-version: 6.0.1xx
           - project-type: maui # error XA5207: Could not find android.jar for API level 31. - Won't solve - out of support.
             dotnet-version: 6.0.4xx
-            os: macos-latest
+            os: macos-15
           - project-type: maui-blazor # error XA5207: Could not find android.jar for API level 31. - Won't solve - out of support.
             dotnet-version: 6.0.4xx
-            os: macos-latest
+            os: macos-15
           - project-type: blazor # N/A
             dotnet-version: 6.0.1xx
           - project-type: blazor # N/A
@@ -33,11 +33,11 @@ jobs:
           - project-type: winforms # N/A
             os: ubuntu-latest
           - project-type: winforms # N/A
-            os: macos-latest
+            os: macos-15
           - project-type: wpf # N/A
             os: ubuntu-latest
           - project-type: wpf # N/A
-            os: macos-latest
+            os: macos-15
           - project-type: maui # MAUI fails on .NET 9 RC2 at the moment: https://github.com/dotnet/sdk/issues/43049
             dotnet-version: '9.0.1xx'
           - project-type: maui-blazor # MAUI fails on .NET 9 RC2 at the moment: https://github.com/dotnet/sdk/issues/43049
@@ -52,7 +52,7 @@ jobs:
     env:
       IS_POSTSHARP_OWNED: true
       TEAMCITY_CLOUD_TOKEN: ${{ secrets.TEAMCITY_CLOUD_TOKEN }}
-      ConsoleAnsi: ${{ (startsWith( matrix.os, 'ubuntu-' ) || startsWith(matrix.os, 'macos-')) && 'No' || 'Detect' }} # https://github.com/orgs/community/discussions/136868
+      ConsoleAnsi: ${{ (matrix.os == 'ubuntu-latest' || matrix.os == 'macos-15') && 'No' || 'Detect' }} # https://github.com/orgs/community/discussions/136868
       MetalamaAssemblyLocatorHooksDirectory: '../..'
     #  METALAMA_DIAGNOSTICS: '{"logging": {"processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": true,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false},"trace": {"*": true},"stopLoggingAfterHours": 2.0},"debugging": {"processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": false,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false}},"crashDumps": {"processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": false,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false},"exceptionTypes": ["*"]},"profiling": {"kind": "performance","processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": false,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false}}}'
 
@@ -98,7 +98,7 @@ jobs:
         java-version: ${{ matrix.dotnet-version == '6.0.4xx' && '11' || '21' }} # error XA0030: Building with JDK version `21.0.2` is not supported. Please install JDK version `11.0`.
 
     - name: Install Android SDK
-      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && (matrix.os == 'ubuntu-latest' || (matrix.os == 'macos-latest' && matrix.dotnet-version == '6.0.4xx'))
+      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && (matrix.os == 'ubuntu-latest' || (matrix.os == 'macos-15' && matrix.dotnet-version == '6.0.4xx'))
       uses: android-actions/setup-android@v3
       with:
         cmdline-tools-version: ${{ matrix.dotnet-version == '6.0.4xx' && '9862592' || '10406996' }} # Based on the Java version installed above. See https://github.com/android-actions/setup-android?tab=readme-ov-file#sdk-version-selection
@@ -111,7 +111,7 @@ jobs:
     - name: Install .NET Workloads
       if: matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor'
       shell: pwsh
-      run: dotnet workload install ${{ matrix.os == 'windows-latest' && 'maui' ||  'maui-android' }}${{ matrix.os == 'macos-latest' && ' && dotnet workload install maui-ios && dotnet workload install maui-maccatalyst' ||  '' }}
+      run: dotnet workload install ${{ matrix.os == 'windows-latest' && 'maui' ||  'maui-android' }}${{ matrix.os == 'macos-15' && ' && dotnet workload install maui-ios && dotnet workload install maui-maccatalyst' ||  '' }}
 
     - name: Set ref version for Assembly Locator
       shell: pwsh
