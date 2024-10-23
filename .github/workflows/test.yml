@@ -38,6 +38,8 @@ jobs:
             os: ubuntu-latest
           - project-type: wpf # N/A
             os: macos-latest
+          - project-type: blazorwasm # Interceptors not supported before Metalama 2025.0.
+            dotnet-version: [ '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx' ]
       fail-fast: false # Don't stop other jobs if one fails.
 
     timeout-minutes: 60
