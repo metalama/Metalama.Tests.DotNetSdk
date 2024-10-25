@@ -132,4 +132,4 @@ jobs:
 
     - name: Print crash reports
       if: always()
-      run: find /tmp/Metalama/CrashReports/* -type f -exec sh -c 'echo "===== {} ====="; cat {}; echo ""' \;
+      run: find /tmp/Metalama/CrashReports/* -type f -exec sh -c 'echo "===== {} ====="; echo "Last modified: $(stat -c %y {})"; cat {}; echo ""' \;
