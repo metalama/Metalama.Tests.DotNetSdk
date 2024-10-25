@@ -75,6 +75,9 @@ jobs:
     #    source: "eng/style/.editorconfig"
     #    target: ".editorconfig"
 
+    - name: Clean crash reports
+      run: rm -v /tmp/Metalama/CrashReports/*
+
     - name: Install .NET For PostSharp.Engineering
       uses: actions/setup-dotnet@v4
       with:
@@ -135,4 +138,4 @@ jobs:
 
     - name: Print crash reports
       if: always()
-      run: find /tmp/Metalama/CrashReports/* -type f -exec sh -c 'echo "===== {} ====="; echo "Last modified $(stat -c %y {})" cat {}; echo ""' \;
+      run: find /tmp/Metalama/CrashReports/* -type f -exec sh -c 'echo "===== {} ====="; cat {}; echo ""' \;
