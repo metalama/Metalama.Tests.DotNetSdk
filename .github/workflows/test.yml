@@ -62,9 +62,6 @@ jobs:
     #- name: Install PowerShell
     #  uses: cakhanif/action-install-powershell@v1
 
-    - name: Clean crash reports
-      run: rm -v /tmp/Metalama/CrashReports/* \;
-
     - name: Checkout
       uses: actions/checkout@v4
       with:
