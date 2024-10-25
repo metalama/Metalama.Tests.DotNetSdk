@@ -62,6 +62,9 @@ jobs:
     #- name: Install PowerShell
     #  uses: cakhanif/action-install-powershell@v1
 
+    - name: Clean crash reports
+      run: rm -v /tmp/Metalama/CrashReports/* \;
+
     - name: Checkout
       uses: actions/checkout@v4
       with:
@@ -74,9 +77,6 @@ jobs:
     #  with:
     #    source: "eng/style/.editorconfig"
     #    target: ".editorconfig"
-
-    - name: Clean crash reports
-      run: rm -v /tmp/Metalama/CrashReports/*
 
     - name: Install .NET For PostSharp.Engineering
       uses: actions/setup-dotnet@v4
