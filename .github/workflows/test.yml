@@ -106,10 +106,6 @@ jobs:
       with:
         cmdline-tools-version: ${{ matrix.dotnet-version == '6.0.4xx' && '9862592' || '10406996' }} # Based on the Java version installed above. See https://github.com/android-actions/setup-android?tab=readme-ov-file#sdk-version-selection
 
-    - name: Install Android SDK Build-Tools
-      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'
-      run: /Users/runner/Library/Android/sdk/tools/android
-
     - name: Add NuGet Feed # https://github.com/dotnet/sdk/issues/43050 TODO: Remove after .NET 9 GA
       if: matrix.dotnet-version == '9.0.1xx' && matrix.project-type == 'blazorwasm'
       shell: pwsh
@@ -130,7 +126,7 @@ jobs:
 
     - name: Build
       shell: pwsh
-      run: ./Build.ps1 build --nologo
+      run: ./Build.ps1 build --nologo -v detailed
 
     - name: Verify Transformations
       shell: pwsh
