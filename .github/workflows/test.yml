@@ -12,8 +12,8 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
-        dotnet-version: ['9.0.1xx'] # ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx']
-        project-type: ['blazorwasm'] # ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
+        dotnet-version: ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx']
+        project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         configuration: [Debug]
         exclude:
           - project-type: maui # N/A
@@ -50,12 +50,6 @@ jobs:
             dotnet-version: '9.0.1xx'
           - project-type: maui-blazor # Interceptors not supported before Metalama 2025.0.
             dotnet-version: '9.0.1xx'
-          # - project-type: maui # MAUI fails on .NET 9 RC2 at the moment: https://github.com/dotnet/sdk/issues/43049
-          #   dotnet-version: '9.0.1xx'
-          # - project-type: maui-blazor # MAUI fails on .NET 9 RC2 at the moment: https://github.com/dotnet/sdk/issues/43049
-          #   dotnet-version: '9.0.1xx'
-          # - project-type: 'blazorwasm' # ASP.NET Core 9.0 builds act like stable releases right now, resulting in missing packages. TODO: Remove after .NET 9 GA.
-          #   dotnet-version: '9.0.1xx'
       fail-fast: false # Don't stop other jobs if one fails.
 
     timeout-minutes: 60
