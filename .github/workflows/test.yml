@@ -46,12 +46,12 @@ jobs:
             dotnet-version: '8.0.4xx'
           - project-type: blazorwasm # Interceptors not supported before Metalama 2025.0.
             dotnet-version: '9.0.1xx'
-          - project-type: maui # MAUI fails on .NET 9 RC2 at the moment: https://github.com/dotnet/sdk/issues/43049
-            dotnet-version: '9.0.1xx'
-          - project-type: maui-blazor # MAUI fails on .NET 9 RC2 at the moment: https://github.com/dotnet/sdk/issues/43049
-            dotnet-version: '9.0.1xx'
-          - project-type: 'blazorwasm' # ASP.NET Core 9.0 builds act like stable releases right now, resulting in missing packages. TODO: Remove after .NET 9 GA.
-            dotnet-version: '9.0.1xx'
+          # - project-type: maui # MAUI fails on .NET 9 RC2 at the moment: https://github.com/dotnet/sdk/issues/43049
+          #   dotnet-version: '9.0.1xx'
+          # - project-type: maui-blazor # MAUI fails on .NET 9 RC2 at the moment: https://github.com/dotnet/sdk/issues/43049
+          #   dotnet-version: '9.0.1xx'
+          # - project-type: 'blazorwasm' # ASP.NET Core 9.0 builds act like stable releases right now, resulting in missing packages. TODO: Remove after .NET 9 GA.
+          #   dotnet-version: '9.0.1xx'
       fail-fast: false # Don't stop other jobs if one fails.
 
     timeout-minutes: 60
@@ -118,10 +118,10 @@ jobs:
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'
       run: sdkmanager "build-tools;32.0.0" "platforms;android-34"
 
-    - name: Add NuGet Feed # https://github.com/dotnet/sdk/issues/43050 TODO: Remove after .NET 9 GA
-      if: matrix.dotnet-version == '9.0.1xx' && matrix.project-type == 'blazorwasm'
-      shell: pwsh
-      run: dotnet new nugetconfig && dotnet nuget add source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json -n dotnet9 --configfile ./nuget.config
+    # - name: Add NuGet Feed # https://github.com/dotnet/sdk/issues/43050 TODO: Remove after .NET 9 GA
+    #   if: matrix.dotnet-version == '9.0.1xx' && matrix.project-type == 'blazorwasm'
+    #   shell: pwsh
+    #   run: dotnet new nugetconfig && dotnet nuget add source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json -n dotnet9 --configfile ./nuget.config
 
     - name: Install .NET Workloads
       if: matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor'
