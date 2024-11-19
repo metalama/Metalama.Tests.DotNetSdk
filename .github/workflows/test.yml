@@ -46,6 +46,10 @@ jobs:
             dotnet-version: '8.0.4xx'
           - project-type: blazorwasm # Interceptors not supported before Metalama 2025.0.
             dotnet-version: '9.0.1xx'
+          - project-type: maui # Interceptors not supported before Metalama 2025.0.
+            dotnet-version: '9.0.1xx'
+          - project-type: maui-blazor # Interceptors not supported before Metalama 2025.0.
+            dotnet-version: '9.0.1xx'
           # - project-type: maui # MAUI fails on .NET 9 RC2 at the moment: https://github.com/dotnet/sdk/issues/43049
           #   dotnet-version: '9.0.1xx'
           # - project-type: maui-blazor # MAUI fails on .NET 9 RC2 at the moment: https://github.com/dotnet/sdk/issues/43049
@@ -122,6 +126,21 @@ jobs:
     #   if: matrix.dotnet-version == '9.0.1xx' && matrix.project-type == 'blazorwasm'
     #   shell: pwsh
     #   run: dotnet new nugetconfig && dotnet nuget add source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json -n dotnet9 --configfile ./nuget.config
+
+    - name: Add .NET 6 NuGet Feeds # https://github.com/dotnet/sdk/issues/29242
+      if: matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor'
+      shell: pwsh
+      run: dotnet new nugetconfig && dotnet nuget add source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet6/nuget/v3/index.json -n dotnet6 --configfile ./nuget.config
+
+    - name: Add .NET 7 NuGet Feeds # https://github.com/dotnet/sdk/issues/29242
+      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && (matrix.dotnet-version == '8.0.1xx' || matrix.dotnet-version == '8.0.3xx' || matrix.dotnet-version == '8.0.4xx')
+      shell: pwsh
+      run: dotnet nuget add source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet7/nuget/v3/index.json -n dotnet7 --configfile ./nuget.config
+
+    - name: Add .NET 8 NuGet Feeds # https://github.com/dotnet/sdk/issues/29242
+      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && (matrix.dotnet-version == '8.0.1xx' || matrix.dotnet-version == '8.0.3xx' || matrix.dotnet-version == '8.0.4xx')
+      shell: pwsh
+      run: dotnet nuget add source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet8/nuget/v3/index.json -n dotnet8 --configfile ./nuget.config
 
     - name: Install .NET Workloads
       if: matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor'
