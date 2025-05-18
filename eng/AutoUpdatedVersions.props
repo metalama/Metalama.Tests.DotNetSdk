@@ -2,7 +2,8 @@
 <Project>
 
     <PropertyGroup>
-        <MetalamaVersion></MetalamaVersion>
+        <!-- This property should never be consumed from the public NuGet feed because the repo is only built as a private test, by design. -->
+        <MetalamaVersion>0.0</MetalamaVersion>
     </PropertyGroup>
 
 </Project>
