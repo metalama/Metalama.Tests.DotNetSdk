@@ -12,24 +12,10 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
-        dotnet-version: ['6.0.1xx', '6.0.4xx', '8.0.1xx', '8.0.3xx', '8.0.4xx', '9.0.1xx', '9.0.2xx']
+        dotnet-version: ['8.0.1xx', '8.0.3xx', '8.0.4xx', '8.0.x', '9.0.1xx', '9.0.2xx', '9.0.x']
         project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         configuration: [Debug]
         exclude:
-          - project-type: maui # N/A
-            dotnet-version: 6.0.1xx
-          - project-type: maui-blazor # N/A
-            dotnet-version: 6.0.1xx
-          - project-type: maui # error XA5207: Could not find android.jar for API level 31. - Won't solve - out of support.
-            dotnet-version: 6.0.4xx
-            os: macos-15
-          - project-type: maui-blazor # error XA5207: Could not find android.jar for API level 31. - Won't solve - out of support.
-            dotnet-version: 6.0.4xx
-            os: macos-15
-          - project-type: blazor # N/A
-            dotnet-version: 6.0.1xx
-          - project-type: blazor # N/A
-            dotnet-version: 6.0.4xx
           - project-type: winforms # N/A
             os: ubuntu-latest
           - project-type: winforms # N/A
@@ -38,18 +24,6 @@ jobs:
             os: ubuntu-latest
           - project-type: wpf # N/A
             os: macos-15
-          - project-type: blazorwasm # Interceptors not supported before Metalama 2025.0.
-            dotnet-version: '8.0.1xx'
-          - project-type: blazorwasm # Interceptors not supported before Metalama 2025.0.
-            dotnet-version: '8.0.3xx'
-          - project-type: blazorwasm # Interceptors not supported before Metalama 2025.0.
-            dotnet-version: '8.0.4xx'
-          - project-type: blazorwasm # Interceptors not supported before Metalama 2025.0.
-            dotnet-version: '9.0.1xx'
-          - project-type: maui # Interceptors not supported before Metalama 2025.0.
-            dotnet-version: '9.0.1xx'
-          - project-type: maui-blazor # Interceptors not supported before Metalama 2025.0.
-            dotnet-version: '9.0.1xx'
       fail-fast: false # Don't stop other jobs if one fails.
 
     timeout-minutes: 60
@@ -75,6 +49,21 @@ jobs:
       with:
         fetch-depth: 0
 
+    # Restore build cache if available
+    - name: Restore build cache
+      id: cache-build
+      uses: actions/cache@v4
+      with:
+        path: |
+          ./.build-cache
+        key: build-${{ matrix.os }}-${{ matrix.dotnet-version }}-${{ matrix.project-type }}-${{ matrix.configuration }}
+
+    - name: Stop if build cache hit
+      if: steps.cache-build.outputs.cache-hit == 'true'
+      run: |
+        echo "Build cache hit, skipping build."
+        exit 0
+
     # Avoid issues with symlinks
     # Needed only locally
     #- name: Copy EditorConfig
@@ -93,7 +82,7 @@ jobs:
       id: setup-dotnet
       with:
         dotnet-version: ${{ matrix.dotnet-version }}
-        dotnet-quality: 'daily' # Use the daily build, so we find potential issues early.
+        dotnet-quality: 'preview' 
 
     - name: Install .NET For Engineering
       uses: actions/setup-dotnet@v4
@@ -142,6 +131,14 @@ jobs:
     - name: Build
       shell: pwsh
       run: ./Build.ps1 build --nologo
+
+    # Save build cache after successful build
+    - name: Save build cache
+      if: success()
+      uses: actions/cache/save@v4
+      with:
+        path: ./.build-cache
+        key: build-${{ matrix.os }}-${{ matrix.dotnet-version }}-${{ matrix.project-type }}-${{ matrix.configuration }}
 
     - name: Verify Transformations
       shell: pwsh
