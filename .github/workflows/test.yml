@@ -11,8 +11,8 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
-        dotnet-version: ['8.0.1xx', '8.0.3xx', '8.0.4xx', '8.0.x', '9.0.1xx', '9.0.2xx', '9.0.x']
+        os: [ubuntu-latest, windows-latest, macos-15]
+        dotnet: ['8.0.1xx,ga', '8.0.2xx,ga', '8.0.3xx,ga', '8.0.4xx,ga', '8.0.x,preview', '9.0.1xx,ga', '9.0.2xx,preview', '9.0.x,preview']
         project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         configuration: [Debug]
         exclude:
@@ -56,7 +56,7 @@ jobs:
       with:
         path: |
           ./.build-cache
-        key: build-${{ matrix.os }}-${{ matrix.dotnet-version }}-${{ matrix.project-type }}-${{ matrix.configuration }}
+        key: build-${{ matrix.os }}-${{ matrix.dotnet }}-${{ matrix.project-type }}-${{ matrix.configuration }}
 
     - name: Stop if build cache hit
       if: steps.cache-build.outputs.cache-hit == 'true'
@@ -64,25 +64,22 @@ jobs:
         echo "Build cache hit, skipping build."
         exit 0
 
-    # Avoid issues with symlinks
-    # Needed only locally
-    #- name: Copy EditorConfig
-    #  uses: canastro/copy-file-action@master
-    #  with:
-    #    source: "eng/style/.editorconfig"
-    #    target: ".editorconfig"
-
-    - name: Install .NET For PostSharp.Engineering
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 8.0.2xx # Keep in sync with eng\src\global.json.
+    - name: Parse .NET version and quality
+      id: parse-dotnet
+      run: |
+        DOTNET_VERSION="${{ matrix.dotnet }}"
+        DOTNET_VERSION="${DOTNET_VERSION%,*}"
+        DOTNET_QUALITY="${{ matrix.dotnet }}"
+        DOTNET_QUALITY="${DOTNET_QUALITY#*,}"
+        echo "version=$DOTNET_VERSION" >> $GITHUB_OUTPUT
+        echo "quality=$DOTNET_QUALITY" >> $GITHUB_OUTPUT
 
     - name: Install .NET For The Test
       uses: actions/setup-dotnet@v4
       id: setup-dotnet
       with:
-        dotnet-version: ${{ matrix.dotnet-version }}
-        dotnet-quality: 'preview' 
+        dotnet-version: ${{ steps.parse-dotnet.outputs.version }}
+        dotnet-quality: ${{ steps.parse-dotnet.outputs.quality }}
 
     - name: Install .NET For Engineering
       uses: actions/setup-dotnet@v4
@@ -138,7 +135,7 @@ jobs:
       uses: actions/cache/save@v4
       with:
         path: ./.build-cache
-        key: build-${{ matrix.os }}-${{ matrix.dotnet-version }}-${{ matrix.project-type }}-${{ matrix.configuration }}
+        key: build-${{ matrix.os }}-${{ matrix.dotnet }}-${{ matrix.project-type }}-${{ matrix.configuration }}
 
     - name: Verify Transformations
       shell: pwsh
