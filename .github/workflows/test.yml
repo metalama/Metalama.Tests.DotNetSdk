@@ -25,6 +25,7 @@ jobs:
           - project-type: wpf # N/A
             os: macos-15
       fail-fast: false # Don't stop other jobs if one fails.
+      max-parallel: 8 # Give a chance to stop early when we run manually.
 
     timeout-minutes: 60
 
@@ -77,22 +78,19 @@ jobs:
       with:
         fetch-depth: 0
 
-   
-
-
     - name: Install .NET For Engineering
       uses: actions/setup-dotnet@v4
       id: setup-dotnet-eng
       with:
         dotnet-version: 9.0.200
 
-    - name: Configure the dependency to Metalama
-      shell: pwsh
-      run: ./Build.ps1 dependencies set BuildServer Metalama --branch ${{github.ref_name}} --nologo
-
     - name: Set the .NET SDK Version
       shell: pwsh
       run: ./Build.ps1 set-sdk-version ${{ steps.setup-dotnet.outputs.dotnet-version }} --nologo
+
+    - name: Configure the dependency to Metalama
+      shell: pwsh
+      run: ./Build.ps1 dependencies set BuildServer Metalama --branch ${{github.ref_name}} --nologo
 
     - name: Install Java
       if: matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor'
