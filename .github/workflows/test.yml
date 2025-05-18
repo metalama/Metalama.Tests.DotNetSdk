@@ -66,12 +66,12 @@ jobs:
           ./.build-cache
         key: build-${{ matrix.os }}-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ matrix.project-type }}-${{ matrix.configuration }}
 
-    - name: Stop if build cache hit
+    - name: Check for cache hit and conditionally fail job
       if: steps.cache-build.outputs.cache-hit == 'true'
+      shell: bash
       run: |
-        echo "Build cache hit, skipping build."
-        exit 0
-
+        echo "Exiting job early due to cache hit."
+        exit 78
 
     - name: Checkout
       uses: actions/checkout@v4
