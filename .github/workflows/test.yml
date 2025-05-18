@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-15]
-        dotnet: ['8.0.1xx,ga', '8.0.2xx,ga', '8.0.3xx,ga', '8.0.4xx,ga', '8.0.x,preview', '9.0.1xx,ga', '9.0.2xx,preview', '9.0.x,preview']
+        dotnet: ['8.0.1xx:ga', '8.0.2xx:ga', '8.0.3xx:ga', '8.0.4xx:ga', '8.0.x:preview', '9.0.1xx:ga', '9.0.2xx:preview', '9.0.x:preview']
         project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         configuration: [Debug]
         exclude:
@@ -48,13 +48,11 @@ jobs:
 
     - name: Parse .NET version and quality
       id: parse-dotnet
+      shell: pwsh
       run: |
-        DOTNET_VERSION="${{ matrix.dotnet }}"
-        DOTNET_VERSION="${DOTNET_VERSION%,*}"
-        DOTNET_QUALITY="${{ matrix.dotnet }}"
-        DOTNET_QUALITY="${DOTNET_QUALITY#*,}"
-        echo "version=$DOTNET_VERSION" >> $GITHUB_OUTPUT
-        echo "quality=$DOTNET_QUALITY" >> $GITHUB_OUTPUT
+        $parts = "${{ matrix.dotnet }}" -split ":"
+        "dotnet-version=$($parts[0])" >> $env:GITHUB_OUTPUT
+        "dotnet-quality=$($parts[1])" >> $env:GITHUB_OUTPUT
 
     - name: Restore build cache
       id: cache-build
@@ -62,7 +60,7 @@ jobs:
       with:
         path: |
           ./.build-cache
-        key: build-${{ matrix.os }}-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ steps.setup-dotnet.outputs.dotnet-quality }}${{ matrix.project-type }}-${{ matrix.configuration }}
+        key: build-${{ matrix.os }}-${{ steps.parse-dotnet.outputs.dotnet-version }}-${{ steps.parse-dotnet.outputs.dotnet-quality }}${{ matrix.project-type }}-${{ matrix.configuration }}
 
     - name: Stop if build cache hit
       if: steps.cache-build.outputs.cache-hit == 'true'
@@ -143,7 +141,7 @@ jobs:
       uses: actions/cache/save@v4
       with:
         path: ./.build-cache
-        key: build-${{ matrix.os }}-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ steps.setup-dotnet.outputs.dotnet-quality }}${{ matrix.project-type }}-${{ matrix.configuration }}
+        key: build-${{ matrix.os }}-${{ steps.parse-dotnet.outputs.dotnet-version }}-${{ steps.parse-dotnet.outputs.dotnet-quality }}${{ matrix.project-type }}-${{ matrix.configuration }}
 
     # - name: Print crash reports
     #   if: always()
