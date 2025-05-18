@@ -95,6 +95,12 @@ jobs:
         dotnet-version: ${{ matrix.dotnet-version }}
         dotnet-quality: 'daily' # Use the daily build, so we find potential issues early.
 
+    - name: Install .NET For Engineering
+      uses: actions/setup-dotnet@v4
+      id: setup-dotnet-eng
+      with:
+        dotnet-version: 9.0.200
+
     - name: Configure the dependency to Metalama
       shell: pwsh
       run: ./Build.ps1 dependencies set Metalama BuildServer --branch ${{github.ref_name}}
