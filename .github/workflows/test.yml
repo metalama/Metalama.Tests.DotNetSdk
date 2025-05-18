@@ -55,7 +55,7 @@ jobs:
       with:
         path: |
           ./.build-cache
-        key: build-${{ matrix.os }}-${{ steps.parse-dotnet.outputs.dotnet-version }}-${{ steps.parse-dotnet.outputs.dotnet-quality }}${{ matrix.project-type }}-${{ matrix.configuration }}
+        key: build-${{ matrix.os }}-${{ steps.parse-dotnet.outputs.dotnet-version }}-${{ steps.parse-dotnet.outputs.dotnet-quality }}-${{ matrix.project-type }}-${{ matrix.configuration }}
 
     - name: Stop if build cache hit
       if: steps.cache-build.outputs.cache-hit == 'true'
@@ -75,8 +75,8 @@ jobs:
       uses: actions/setup-dotnet@v4
       id: setup-dotnet
       with:
-        dotnet-version: ${{ steps.parse-dotnet.outputs.version }}
-        dotnet-quality: ${{ steps.parse-dotnet.outputs.quality }}
+        dotnet-version: ${{ steps.parse-dotnet.outputs.dotnet-version }}
+        dotnet-quality: ${{ steps.parse-dotnet.outputs.dotnet-quality }}
 
     - name: Install .NET For Engineering
       uses: actions/setup-dotnet@v4
@@ -140,7 +140,7 @@ jobs:
       uses: actions/cache/save@v4
       with:
         path: ./.build-cache
-        key: build-${{ matrix.os }}-${{ steps.parse-dotnet.outputs.dotnet-version }}-${{ steps.parse-dotnet.outputs.dotnet-quality }}${{ matrix.project-type }}-${{ matrix.configuration }}
+        key: build-${{ matrix.os }}-${{ steps.parse-dotnet.outputs.dotnet-version }}-${{ steps.parse-dotnet.outputs.dotnet-quality }}-${{ matrix.project-type }}-${{ matrix.configuration }}
 
     # - name: Print crash reports
     #   if: always()
