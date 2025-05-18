@@ -103,7 +103,7 @@ jobs:
 
     - name: Configure the dependency to Metalama
       shell: pwsh
-      run: ./Build.ps1 dependencies set Metalama BuildServer --branch ${{github.ref_name}}
+      run: ./Build.ps1 dependencies set BuildServer Metalama --branch ${{github.ref_name}} --nologo
 
     - name: Set the .NET SDK Version
       shell: pwsh
