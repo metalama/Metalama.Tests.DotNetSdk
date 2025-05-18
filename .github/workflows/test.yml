@@ -44,13 +44,25 @@ jobs:
     #- name: Install PowerShell
     #  uses: cakhanif/action-install-powershell@v1
     # Restore build cache if available
+
+
+    - name: Parse .NET version and quality
+      id: parse-dotnet
+      run: |
+        DOTNET_VERSION="${{ matrix.dotnet }}"
+        DOTNET_VERSION="${DOTNET_VERSION%,*}"
+        DOTNET_QUALITY="${{ matrix.dotnet }}"
+        DOTNET_QUALITY="${DOTNET_QUALITY#*,}"
+        echo "version=$DOTNET_VERSION" >> $GITHUB_OUTPUT
+        echo "quality=$DOTNET_QUALITY" >> $GITHUB_OUTPUT
+
     - name: Restore build cache
       id: cache-build
       uses: actions/cache@v4
       with:
         path: |
           ./.build-cache
-        key: build-${{ matrix.os }}-${{ matrix.dotnet }}-${{ matrix.project-type }}-${{ matrix.configuration }}
+        key: build-${{ matrix.os }}-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ steps.setup-dotnet.outputs.dotnet-quality }}${{ matrix.project-type }}-${{ matrix.configuration }}
 
     - name: Stop if build cache hit
       if: steps.cache-build.outputs.cache-hit == 'true'
@@ -64,15 +76,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Parse .NET version and quality
-      id: parse-dotnet
-      run: |
-        DOTNET_VERSION="${{ matrix.dotnet }}"
-        DOTNET_VERSION="${DOTNET_VERSION%,*}"
-        DOTNET_QUALITY="${{ matrix.dotnet }}"
-        DOTNET_QUALITY="${DOTNET_QUALITY#*,}"
-        echo "version=$DOTNET_VERSION" >> $GITHUB_OUTPUT
-        echo "quality=$DOTNET_QUALITY" >> $GITHUB_OUTPUT
+   
 
     - name: Install .NET For The Test
       uses: actions/setup-dotnet@v4
@@ -139,9 +143,7 @@ jobs:
       uses: actions/cache/save@v4
       with:
         path: ./.build-cache
-        key: build-${{ matrix.os }}-${{ matrix.dotnet }}-${{ matrix.project-type }}-${{ matrix.configuration }}
-
-
+        key: build-${{ matrix.os }}-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ steps.setup-dotnet.outputs.dotnet-quality }}${{ matrix.project-type }}-${{ matrix.configuration }}
 
     # - name: Print crash reports
     #   if: always()
