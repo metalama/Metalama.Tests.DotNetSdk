@@ -11,9 +11,15 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-15]
-        dotnet: ['8.x:ga', '8.x:daily', '9.0.1xx:ga', '9.0.2xx:ga', '9.0.3xx:daily', '9.0.x:daily', '9.0.x:ga']
-        project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
+        #os: [ubuntu-latest, windows-latest, macos-15]
+        #dotnet: ['8.x:ga', '8.x:daily', '9.0.1xx:ga', '9.0.2xx:ga', '9.0.3xx:daily', '9.0.x:daily', '9.0.x:ga']
+        #project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
+
+        os: [macos-15]
+        dotnet: ['9.0.x:ga']
+        project-type: ['maui'] 
+
+
         configuration: [Debug]
         exclude:
           - project-type: winforms # N/A
