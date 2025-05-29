@@ -37,8 +37,7 @@ jobs:
       TEAMCITY_CLOUD_TOKEN: ${{ secrets.TEAMCITY_CLOUD_TOKEN }}
       ConsoleAnsi: ${{ (matrix.os == 'ubuntu-latest' || matrix.os == 'macos-15') && 'No' || 'Detect' }} # https://github.com/orgs/community/discussions/136868
       MetalamaAssemblyLocatorHooksDirectory: '../..'
-    #  METALAMA_TEMP: ${{ (matrix.os == 'ubuntu-latest' || matrix.os == 'macos-15') && '/tmp' || '' }}
-    #  METALAMA_DIAGNOSTICS: '{"logging": {"processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": true,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false},"trace": {"*": true},"stopLoggingAfterHours": 2.0},"debugging": {"processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": false,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false}},"crashDumps": {"processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": false,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false},"exceptionTypes": ["*"]},"profiling": {"kind": "performance","processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": false,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false}}}'
+      CacheKeyPrefix: '100' # Increase this value to invalidate the cache.
 
     steps:
 
@@ -64,7 +63,7 @@ jobs:
       with:
         path: |
           ./.build-cache
-        key: build-${{ matrix.os }}-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ matrix.project-type }}-${{ matrix.configuration }}
+        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ matrix.project-type }}-${{ matrix.configuration }}
 
     - name: Checkout
       uses: actions/checkout@v4
@@ -146,7 +145,7 @@ jobs:
       uses: actions/cache/save@v4
       with:
         path: ./.build-cache
-        key: build-${{ matrix.os }}-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ matrix.project-type }}-${{ matrix.configuration }}
+        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ matrix.project-type }}-${{ matrix.configuration }}
 
     # - name: Print crash reports
     #   if: always()
