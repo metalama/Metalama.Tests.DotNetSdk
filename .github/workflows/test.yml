@@ -108,7 +108,9 @@ jobs:
     - name: Install Xcode
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
       run: |
+        sudo xcode-select --install
         sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+        xcrun --find actool
         echo "/Applications/Xcode.app/Contents/Developer/usr/bin" >> $GITHUB_PATH
 
     - name: Install .NET Workloads
