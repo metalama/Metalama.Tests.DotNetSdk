@@ -116,7 +116,7 @@ jobs:
       run: |
         sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
         xcrun --find actool
-        xcode-select -p
+        echo "/Applications/Xcode_16.app/Contents/Developer/usr/bin" >> $GITHUB_PATH
 
     - name: Install .NET Workloads
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor')  && steps.cache-build.outputs.cache-hit != 'true'
