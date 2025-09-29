@@ -7,4 +7,9 @@
 
     <Import Project="eng\Versions.props"/>
 
+    <PropertyGroup>
+        <!-- The latest version supported by Metalama Compiler may be higher that the latest version supported by Metalama Framework. -->
+        <LangVersion>$(LangMaxVersion)</LangVersion>
+    </PropertyGroup>
+
 </Project>
