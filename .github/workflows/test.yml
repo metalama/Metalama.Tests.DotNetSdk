@@ -108,13 +108,13 @@ jobs:
       shell: pwsh
       run: ./Build.ps1 set-ref-version ${{ steps.setup-dotnet.outputs.dotnet-version }} --nologo
 
-    - name: Create Project
+    - name: Create project
       shell: pwsh
       run: ./Build.ps1 create-project ${{ matrix.project-type }} --nologo
 
     - name: Restore workloads
       shell: pwsh
-      run: dotnet restore workload 
+      run: cd src/Metalama.Tests.DotNetSdk/Metalama.Tests.DotNetSdk.csproj && dotnet workload restore
 
     - name: Build
       shell: pwsh
