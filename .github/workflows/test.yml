@@ -126,6 +126,7 @@ jobs:
       run: dotnet new nugetconfig && dotnet nuget add source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json -n dotnet9 --configfile ./nuget.config
 
     - name: Download Metalama and create global.json
+      if: steps.cache-build.outputs.cache-hit != 'true'
       shell: pwsh
       run: ./Build.ps1 prepare --sdk-version ${{ env.DOTNET_CLEANED_VERSION }} --nologo --no-progress; type global.json
 
