@@ -43,4 +43,9 @@ launchSettings.json
 /eng/tools
 *.Import.props
 *.g.props
+*.g.ps1
+*.g.json
 *.log
+**/.idea/copilot.data.*
+nuget.config
+global.json

@@ -89,10 +89,6 @@ jobs:
         dotnet-version: ${{ matrix.dotnet-version }}
         dotnet-quality: 'daily' # Use the daily build, so we find potential issues early.
 
-    - name: Set The .NET SDK Version
-      shell: pwsh
-      run: ./Build.ps1 set-sdk-version ${{ steps.setup-dotnet.outputs.dotnet-version }} --nologo
-
     - name: Install Java
       if: matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor'
       uses: actions/setup-java@v4
@@ -130,7 +126,7 @@ jobs:
 
     - name: Build
       shell: pwsh
-      run: ./Build.ps1 build --nologo
+      run: ./Build.ps1 build --sdk-version ${{ steps.setup-dotnet.outputs.dotnet-version }} --nologo
 
     - name: Verify Transformations
       shell: pwsh
