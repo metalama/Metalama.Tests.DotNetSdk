@@ -82,7 +82,7 @@ jobs:
       shell: pwsh
       if: steps.cache-build.outputs.cache-hit != 'true'
       run: |
-        $version = "${{ steps.setup-dotnet.outputs.dotnet-version }}"
+        $version = "${{ steps.parse-dotnet.outputs.dotnet-version }}"
         $cleanedVersion = $version -replace '-servicing.*', ''
         echo "DOTNET_CLEANED_VERSION=$cleanedVersion" >> $env:GITHUB_ENV
         echo "Cleaned version: $cleanedVersion"
