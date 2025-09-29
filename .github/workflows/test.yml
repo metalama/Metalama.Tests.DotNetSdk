@@ -107,10 +107,10 @@ jobs:
       shell: pwsh
       run: ./Build.ps1 prepare --sdk-version ${{ env.DOTNET_CLEANED_VERSION }} --nologo; type global.json
 
-#    - name: Install .NET Workloads
-#      if: matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor'
-#      shell: pwsh
-#      run: dotnet workload install ${{ matrix.os == 'windows-latest' && 'maui' || 'maui-android' }}${{ matrix.os == 'macos-15' && ' && dotnet workload install maui-ios && dotnet workload install maui-maccatalyst' || '' }}
+    - name: Install .NET Workloads
+      if: matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor'
+      shell: pwsh
+      run: dotnet workload install ${{ matrix.os == 'windows-latest' && 'maui' || 'maui-android' }}${{ matrix.os == 'macos-15' && ' && dotnet workload install maui-ios && dotnet workload install maui-maccatalyst' || '' }}
 
     - name: Create project
       shell: pwsh
