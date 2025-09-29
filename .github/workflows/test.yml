@@ -23,6 +23,14 @@ jobs:
             os: ubuntu-latest
           - project-type: wpf # N/A
             os: macos-15
+
+          # Blazor does not work in Metalama 2025.1 because its source generators require Roslyn 5.0.
+          - project-type: blazor
+            dotnet-version: '10.0.1xx:preview'
+          - project-type: maui-blazor
+            dotnet-version: '10.0.1xx:preview'
+          - project-type: blazorwasm 
+            dotnet-version: '10.0.1xx:preview'
       fail-fast: false # Don't stop other jobs if one fails.
       max-parallel: 8 # Give a chance to stop early when we run manually.
 
