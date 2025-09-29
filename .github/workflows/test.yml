@@ -29,6 +29,7 @@ jobs:
           - project-type: maui-blazor # Interceptors not supported before Metalama 2025.0.
             dotnet-version: '9.0.1xx'
       fail-fast: false # Don't stop other jobs if one fails.
+      max-parallel: 8 # Give a chance to stop early when we run manually.
 
     timeout-minutes: 60
 
@@ -40,66 +41,80 @@ jobs:
       TEAMCITY_CLOUD_TOKEN: ${{ secrets.TEAMCITY_CLOUD_TOKEN }}
       ConsoleAnsi: ${{ (matrix.os == 'ubuntu-latest' || matrix.os == 'macos-15') && 'No' || 'Detect' }} # https://github.com/orgs/community/discussions/136868
       MetalamaAssemblyLocatorHooksDirectory: '../..'
-    #  METALAMA_TEMP: ${{ (matrix.os == 'ubuntu-latest' || matrix.os == 'macos-15') && '/tmp' || '' }}
-    #  METALAMA_DIAGNOSTICS: '{"logging": {"processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": true,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false},"trace": {"*": true},"stopLoggingAfterHours": 2.0},"debugging": {"processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": false,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false}},"crashDumps": {"processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": false,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false},"exceptionTypes": ["*"]},"profiling": {"kind": "performance","processes": {"BackstageWorker": false,"DevEnv": false,"LinqPad": false,"TestHost": false,"RoslynCodeAnalysisService": false,"OmniSharp": false,"Rider": false,"Other": false,"ResharperTestRunner": false,"Compiler": false,"BackstageDesktopWindows": false,"VisualStudioMac": false,"LanguageServer": false,"CodeLensService": false,"DotNetTool": false}}}'
+      CacheKeyPrefix: '100' # Increase this value to invalidate the cache.
 
     steps:
-    # Needed only locally
-    #- name: Install PowerShell
-    #  uses: cakhanif/action-install-powershell@v1
 
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+    - name: Parse .NET version and quality
+      id: parse-dotnet
+      shell: pwsh
+      run: |
+        $parts = "${{ matrix.dotnet }}" -split ":"
+        "dotnet-version=$($parts[0])" >> $env:GITHUB_OUTPUT
+        "dotnet-quality=$($parts[1])" >> $env:GITHUB_OUTPUT
 
-    # Avoid issues with symlinks
-    # Needed only locally
-    #- name: Copy EditorConfig
-    #  uses: canastro/copy-file-action@master
-    #  with:
-    #    source: "eng/style/.editorconfig"
-    #    target: ".editorconfig"
-
-    - name: Install .NET For PostSharp.Engineering
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 9.0.3xx # Keep in sync with eng\src\global.json.
 
     - name: Install .NET For The Test
       uses: actions/setup-dotnet@v4
       id: setup-dotnet
       with:
-        dotnet-version: ${{ matrix.dotnet-version }}
-        dotnet-quality: 'daily' # Use the daily build, so we find potential issues early.
+        dotnet-version: ${{ steps.parse-dotnet.outputs.dotnet-version }}
+        dotnet-quality: ${{ steps.parse-dotnet.outputs.dotnet-quality }}        
+
+    - name: Restore build cache
+      id: cache-build
+      uses: actions/cache@v4
+      with:
+        path: |
+          ./.build-cache
+        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ matrix.project-type }}-${{ matrix.configuration }}
+
+    - name: Checkout
+      uses: actions/checkout@v4
+      if: steps.cache-build.outputs.cache-hit != 'true'
+      with:
+        fetch-depth: 0
+
+    - name: Install .NET For Engineering
+      uses: actions/setup-dotnet@v4
+      id: setup-dotnet-eng
+      if: steps.cache-build.outputs.cache-hit != 'true'
+      with:
+        dotnet-version: 9.0.3xx # Keep in sync with eng\src\global.json.
 
     - name: Clean up .NET version
       shell: pwsh
+      if: steps.cache-build.outputs.cache-hit != 'true'
       run: |
         $version = "${{ steps.setup-dotnet.outputs.dotnet-version }}"
         $cleanedVersion = $version -replace '-servicing.*', ''
         echo "DOTNET_CLEANED_VERSION=$cleanedVersion" >> $env:GITHUB_ENV
         echo "Cleaned version: $cleanedVersion"
 
+    - name: Configure the dependency to Metalama
+      shell: pwsh
+      if: steps.cache-build.outputs.cache-hit != 'true'
+      run: ./Build.ps1 dependencies set BuildServer Metalama --branch ${{github.ref_name}} --nologo
+
     - name: Install Java
-      if: matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor'
+      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && steps.cache-build.outputs.cache-hit != 'true'
       uses: actions/setup-java@v4
       with:
         distribution: 'microsoft'
         java-version: ${{ matrix.dotnet-version == '6.0.4xx' && '11' || '17' }} # error XA0030: Building with JDK version `21.0.2` is not supported. Please install JDK version `11.0`.
 
     - name: Install Android SDK
-      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && (matrix.os == 'ubuntu-latest' || matrix.os == 'macos-15')
+      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && (matrix.os == 'ubuntu-latest' || matrix.os == 'macos-15') && steps.cache-build.outputs.cache-hit != 'true'
       uses: android-actions/setup-android@v3
       with:
           cmdline-tools-version: ${{ matrix.dotnet-version == '6.0.4xx' && '9862592' || '10406996' }} # Based on the Java version installed above. See https://github.com/android-actions/setup-android?tab=readme-ov-file#sdk-version-selection
   
     - name: Install Android SDK Tools
-      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'
+      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
       run: sdkmanager "build-tools;32.0.0" "platforms;android-34"
 
     - name: Add NuGet Feed # https://github.com/dotnet/sdk/issues/43050 TODO: Remove after .NET 9 GA
-      if: matrix.dotnet-version == '9.0.1xx' && matrix.project-type == 'blazorwasm'
+      if: matrix.dotnet-version == '9.0.1xx' && matrix.project-type == 'blazorwasm' &&  steps.cache-build.outputs.cache-hit != 'true'
       shell: pwsh
       run: dotnet new nugetconfig && dotnet nuget add source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json -n dotnet9 --configfile ./nuget.config
 
@@ -107,31 +122,52 @@ jobs:
       shell: pwsh
       run: ./Build.ps1 prepare --sdk-version ${{ env.DOTNET_CLEANED_VERSION }} --nologo; type global.json
 
+    - name: Install Xcode
+      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
+      run: |
+        sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+        xcrun --find actool
+        echo "/Applications/Xcode_16.app/Contents/Developer/usr/bin" >> $GITHUB_PATH
+
     - name: Install .NET Workloads
-      if: matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor'
+      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor')  && steps.cache-build.outputs.cache-hit != 'true'
       shell: pwsh
       run: dotnet workload install ${{ matrix.os == 'windows-latest' && 'maui' || 'maui-android' }}${{ matrix.os == 'macos-15' && ' && dotnet workload install maui-ios && dotnet workload install maui-maccatalyst' || '' }}
 
+    - name: Set ref version for Assembly Locator
+      shell: pwsh
+      if:  steps.cache-build.outputs.cache-hit != 'true'
+      run: ./Build.ps1 set-ref-version ${{ steps.setup-dotnet.outputs.dotnet-version }} --nologo
+
     - name: Create project
       shell: pwsh
+      if:  steps.cache-build.outputs.cache-hit != 'true'
       run: ./Build.ps1 create-project ${{ matrix.project-type }} --nologo
 
     - name: Restore workloads
       shell: pwsh
+      if: steps.cache-build.outputs.cache-hit != 'true'
       run: cd src/Metalama.Tests.DotNetSdk && dotnet workload restore
-
-    - name: Set ref version for Assembly Locator
-      shell: pwsh
-      run: ./Build.ps1 set-ref-version ${{ env.DOTNET_CLEANED_VERSION }} --nologo
 
     - name: Build
       shell: pwsh
+      if:  steps.cache-build.outputs.cache-hit != 'true'
       run:  cd src/Metalama.Tests.DotNetSdk && dotnet build
 
     - name: Verify Transformations
       shell: pwsh
+      if:  steps.cache-build.outputs.cache-hit != 'true'
       run: ./Build.ps1 verify-transformations --nologo
 
-    # - name: Print crash reports
-    #   if: always()
-    #   run: find /tmp/Metalama/CrashReports/* -type f -exec sh -c 'echo "===== {} ====="; cat {}; echo ""' \;
+    # Create build cache marker file
+    - name: Mark build cache as successful
+      if: steps.cache-build.outputs.cache-hit != 'true'
+      run: echo Success > ./.build-cache
+
+    # Save build cache after successful build
+    - name: Save build cache
+      if: success() && steps.cache-build.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ./.build-cache
+        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ matrix.project-type }}-${{ matrix.configuration }}
