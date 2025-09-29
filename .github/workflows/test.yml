@@ -144,10 +144,10 @@ jobs:
       if:  steps.cache-build.outputs.cache-hit != 'true'
       run: ./Build.ps1 create-project ${{ matrix.project-type }} --nologo
 
-    - name: Restore workloads
-      shell: pwsh
-      if: steps.cache-build.outputs.cache-hit != 'true'
-      run: cd src/Metalama.Tests.DotNetSdk && dotnet workload restore
+#    - name: Restore workloads
+#      shell: pwsh
+#      if: steps.cache-build.outputs.cache-hit != 'true'
+#      run: cd src/Metalama.Tests.DotNetSdk && dotnet workload restore
 
     - name: Build
       shell: pwsh
