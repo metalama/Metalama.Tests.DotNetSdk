@@ -73,6 +73,14 @@ jobs:
         dotnet-version: ${{ matrix.dotnet-version }}
         dotnet-quality: 'daily' # Use the daily build, so we find potential issues early.
 
+    - name: Clean up .NET version
+      shell: pwsh
+      run: |
+        $version = "${{ steps.setup-dotnet.outputs.dotnet-version }}"
+        $cleanedVersion = $version -replace '-servicing.*', ''
+        echo "DOTNET_CLEANED_VERSION=$cleanedVersion" >> $env:GITHUB_ENV
+        echo "Cleaned version: $cleanedVersion"
+
     - name: Install Java
       if: matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor'
       uses: actions/setup-java@v4
@@ -97,16 +105,12 @@ jobs:
 
     - name: Download Metalama and create global.json
       shell: pwsh
-      run: ./Build.ps1 prepare --sdk-version ${{ steps.setup-dotnet.outputs.dotnet-version }} --nologo; type global.json
+      run: ./Build.ps1 prepare --sdk-version ${{ env.DOTNET_CLEANED_VERSION }} --nologo; type global.json
 
 #    - name: Install .NET Workloads
 #      if: matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor'
 #      shell: pwsh
 #      run: dotnet workload install ${{ matrix.os == 'windows-latest' && 'maui' || 'maui-android' }}${{ matrix.os == 'macos-15' && ' && dotnet workload install maui-ios && dotnet workload install maui-maccatalyst' || '' }}
-
-    - name: Set ref version for Assembly Locator
-      shell: pwsh
-      run: ./Build.ps1 set-ref-version ${{ steps.setup-dotnet.outputs.dotnet-version }} --nologo
 
     - name: Create project
       shell: pwsh
@@ -114,11 +118,15 @@ jobs:
 
     - name: Restore workloads
       shell: pwsh
-      run: cd src/Metalama.Tests.DotNetSdk/Metalama.Tests.DotNetSdk.csproj && dotnet workload restore
+      run: cd src/Metalama.Tests.DotNetSdk && dotnet workload restore
+
+    - name: Set ref version for Assembly Locator
+      shell: pwsh
+      run: ./Build.ps1 set-ref-version ${{ env.DOTNET_CLEANED_VERSION }} --nologo
 
     - name: Build
       shell: pwsh
-      run: ./Build.ps1 build --sdk-version ${{ steps.setup-dotnet.outputs.dotnet-version }} --nologo
+      run: ./Build.ps1 build --sdk-version ${{ env.DOTNET_CLEANED_VERSION }} --nologo
 
     - name: Verify Transformations
       shell: pwsh
