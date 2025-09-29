@@ -126,7 +126,7 @@ jobs:
 
     - name: Build
       shell: pwsh
-      run: ./Build.ps1 build --sdk-version ${{ env.DOTNET_CLEANED_VERSION }} --nologo
+      run:  cd src/Metalama.Tests.DotNetSdk && dotnet build
 
     - name: Verify Transformations
       shell: pwsh
