@@ -44,7 +44,7 @@ jobs:
       id: parse-dotnet
       shell: pwsh
       run: |
-        $parts = "${{ matrix.dotnet }}" -split ":"
+        $parts = "${{ matrix.dotnet-version }}" -split ":"
         "dotnet-version=$($parts[0])" >> $env:GITHUB_OUTPUT
         "dotnet-quality=$($parts[1])" >> $env:GITHUB_OUTPUT
 
