@@ -95,14 +95,14 @@ jobs:
       shell: pwsh
       run: dotnet new nugetconfig && dotnet nuget add source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json -n dotnet9 --configfile ./nuget.config
 
-    - name: Create global.json
+    - name: Download Metalama and create global.json
       shell: pwsh
-      run: ./Build.ps1 prepare --sdk-version ${{ steps.setup-dotnet.outputs.dotnet-version }} --nologo
+      run: ./Build.ps1 prepare --sdk-version ${{ steps.setup-dotnet.outputs.dotnet-version }} --nologo; type global.json
 
-    - name: Install .NET Workloads
-      if: matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor'
-      shell: pwsh
-      run: dotnet workload install ${{ matrix.os == 'windows-latest' && 'maui' || 'maui-android' }}${{ matrix.os == 'macos-15' && ' && dotnet workload install maui-ios && dotnet workload install maui-maccatalyst' || '' }}
+#    - name: Install .NET Workloads
+#      if: matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor'
+#      shell: pwsh
+#      run: dotnet workload install ${{ matrix.os == 'windows-latest' && 'maui' || 'maui-android' }}${{ matrix.os == 'macos-15' && ' && dotnet workload install maui-ios && dotnet workload install maui-maccatalyst' || '' }}
 
     - name: Set ref version for Assembly Locator
       shell: pwsh
@@ -111,6 +111,10 @@ jobs:
     - name: Create Project
       shell: pwsh
       run: ./Build.ps1 create-project ${{ matrix.project-type }} --nologo
+
+    - name: Restore workloads
+      shell: pwsh
+      run: dotnet restore workload --include-previews 
 
     - name: Build
       shell: pwsh
