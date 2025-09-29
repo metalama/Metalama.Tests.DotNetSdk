@@ -127,7 +127,7 @@ jobs:
 
     - name: Download Metalama and create global.json
       shell: pwsh
-      run: ./Build.ps1 prepare --sdk-version ${{ env.DOTNET_CLEANED_VERSION }} --nologo; type global.json
+      run: ./Build.ps1 prepare --sdk-version ${{ env.DOTNET_CLEANED_VERSION }} --nologo --no-progress; type global.json
 
     - name: Install Xcode
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
