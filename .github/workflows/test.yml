@@ -114,7 +114,7 @@ jobs:
 
     - name: Restore workloads
       shell: pwsh
-      run: dotnet restore workload --include-previews 
+      run: dotnet restore workload 
 
     - name: Build
       shell: pwsh
