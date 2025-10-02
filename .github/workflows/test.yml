@@ -9,8 +9,6 @@ jobs:
 
   build:
 
-    # Exclusions cannot take arrays: https://github.com/orgs/community/discussions/7835
-
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
@@ -130,7 +128,7 @@ jobs:
     - name: Download Metalama and create global.json
       if: steps.cache-build.outputs.cache-hit != 'true'
       shell: pwsh
-      run: ./Build.ps1 prepare --sdk-version ${{ env.DOTNET_CLEANED_VERSION }} --nologo --no-progress; type global.json
+      run: ./Build.ps1 prepare --sdk-version ${{ env.DOTNET_CLEANED_VERSION }} --nologo --no-progress; type global.json; type nuget.config;
 
     - name: Install Xcode
       uses: maxim-lobanov/setup-xcode@v1
