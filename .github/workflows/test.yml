@@ -82,6 +82,11 @@ jobs:
         $exactVersion = .\GetLatestVersion.ps1 -VersionPrefix "${{ matrix.dotnet-version }}"
         "exact-version=$exactVersion" >> $env:GITHUB_OUTPUT
         Write-Host "Resolved ${{ matrix.dotnet-version }} to $exactVersion"
+        # Update job name to include exact version for summary parsing
+        echo "JOB_EXACT_VERSION=$exactVersion" >> $env:GITHUB_ENV
+
+    - name: "Exact Version: ${{ steps.get-exact-version.outputs.exact-version }}"
+      run: echo "Using exact .NET version ${{ steps.get-exact-version.outputs.exact-version }}"
 
     - name: Restore build cache
       id: cache-build

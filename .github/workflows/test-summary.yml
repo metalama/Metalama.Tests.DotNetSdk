@@ -72,9 +72,26 @@ jobs:
             // Job name format: "build (ubuntu-latest, 8.0.1xx, console)"
             const match = job.name.match(/build \(([^,]+), ([^,]+), ([^)]+)\)/);
             if (match) {
+              // Extract exact version from job steps
+              let exactVersion = match[2]; // Default to matrix version
+              if (job.steps) {
+                // Look for the step with exact version in its name
+                const versionStep = job.steps.find(step => 
+                  step.name && step.name.startsWith('Exact Version: ')
+                );
+                if (versionStep) {
+                  // Extract version from step name: "Exact Version: 10.0.100-rc.1.25451.107"
+                  const versionMatch = versionStep.name.match(/^Exact Version: (.+)$/);
+                  if (versionMatch) {
+                    exactVersion = versionMatch[1];
+                  }
+                }
+              }
+              
               return {
                 os: match[1],
                 dotnetVersion: match[2], 
+                exactVersion: exactVersion, // Add exact version field
                 projectType: match[3],
                 status: job.conclusion,
                 duration: job.steps ? job.steps.reduce((total, step) => {
@@ -111,8 +128,10 @@ jobs:
           const data = JSON.parse(process.env.WORKFLOW_DATA);
           const results = data.results;
           
-          // Group results by .NET version
+          // Group results by .NET version and collect exact versions
           const versionGroups = {};
+          const exactVersions = {}; // Map of dotnetVersion -> exactVersion
+          
           results.forEach(result => {
             if (!versionGroups[result.dotnetVersion]) {
               versionGroups[result.dotnetVersion] = {};
@@ -121,6 +140,11 @@ jobs:
               versionGroups[result.dotnetVersion][result.projectType] = {};
             }
             versionGroups[result.dotnetVersion][result.projectType][result.os] = result;
+            
+            // Track exact version for this .NET version (use first encountered exact version)
+            if (!exactVersions[result.dotnetVersion] && result.exactVersion) {
+              exactVersions[result.dotnetVersion] = result.exactVersion;
+            }
           });
           
           // Get all unique operating systems and project types
@@ -155,7 +179,11 @@ jobs:
             
             return 0;  // Versions are equal
           }).forEach(dotnetVersion => {
-            markdown += `## .NET ${dotnetVersion}\n\n`;
+            const exactVer = exactVersions[dotnetVersion];
+            const versionDisplay = exactVer && exactVer !== dotnetVersion 
+              ? `${dotnetVersion} (${exactVer})` 
+              : dotnetVersion;
+            markdown += `## .NET ${versionDisplay}\n\n`;
             
             // Table header
             markdown += `| Project Type | ${allOS.join(' | ')} |\n`;
