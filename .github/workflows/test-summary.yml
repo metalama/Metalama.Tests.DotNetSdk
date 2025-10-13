@@ -6,6 +6,11 @@ on:
     types:
       - completed
 
+# Configuration: Issue numbers for test summary reports by branch
+# Create issues manually and update the numbers below
+env:
+  SUMMARY_ISSUE_NUMBER: 3  # Issue number for this branch 
+
 jobs:
   summarize:
     runs-on: ubuntu-latest
@@ -150,7 +155,7 @@ jobs:
             
             return 0;  // Versions are equal
           }).forEach(dotnetVersion => {
-            markdown += `## � .NET ${dotnetVersion}\n\n`;
+            markdown += `## .NET ${dotnetVersion}\n\n`;
             
             // Table header
             markdown += `| Project Type | ${allOS.join(' | ')} |\n`;
@@ -183,7 +188,7 @@ jobs:
           });
           
           // Add overall summary
-          markdown += `## � Overall Summary\n\n`;
+          markdown += `## Overall Summary\n\n`;
           
           // Summary by .NET version
           const versionSummary = {};
@@ -264,4 +269,82 @@ jobs:
               issue_number: prNumber,
               body: summary
             });
+          }
+
+    - name: Update branch summary issue
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const summary = fs.readFileSync('summary.md', 'utf8');
+          
+          // Get branch name and issue number
+          const branch = context.payload.workflow_run.head_branch;
+          const issueNumber = process.env.SUMMARY_ISSUE_NUMBER;
+          
+          console.log(`Branch: ${branch}`);
+          console.log(`Issue number: ${issueNumber}`);
+          
+          if (!issueNumber) {
+            console.log(`⚠️  No summary issue configured.`);
+            console.log(`Please create an issue and set SUMMARY_ISSUE_NUMBER environment variable.`);
+            return;
+          }
+          
+          // Verify token permissions by trying to get the issue first
+          try {
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: parseInt(issueNumber)
+            });
+            
+            console.log(`✅ Found issue #${issueNumber}: "${issue.title}"`);
+          } catch (error) {
+            console.error(`❌ Failed to access issue #${issueNumber}:`, error.message);
+            console.error(`Please check:
+            1. Issue #${issueNumber} exists
+            2. GITHUB_TOKEN has 'issues: write' permission
+            3. Issue is not in a private repo with insufficient access`);
+            throw error;
+          }
+          
+          // Create the updated issue body with clear description
+          const timestamp = new Date().toISOString();
+          const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.payload.workflow_run.id}`;
+          
+          const issueBody = [
+            '<!-- AUTO-GENERATED TEST SUMMARY - DO NOT EDIT MANUALLY -->',
+            '# 🤖 Automated Test Results Summary',
+            '',
+            '> **⚠️ This is a pseudo-issue used for storing automated test summary reports.**',
+            '> **This content is automatically generated and updated by GitHub Actions.**',
+            `> **Branch:** \`${branch}\``,
+            `> **Last Updated:** ${timestamp}`,
+            `> **Source Run:** [${context.payload.workflow_run.id}](${runUrl})`,
+            '',
+            '---',
+            '',
+            summary,
+            '',
+            '---',
+            '',
+            `*This summary is automatically updated when the Platform Integration Tests workflow completes on the \`${branch}\` branch.*`
+          ].join('\n');
+
+          // Update the issue
+          try {
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: parseInt(issueNumber),
+              body: issueBody
+            });
+            
+            console.log(`✅ Successfully updated issue #${issueNumber} with latest test summary`);
+            console.log(`🔗 View at: https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}`);
+            
+          } catch (error) {
+            console.error(`❌ Failed to update issue #${issueNumber}:`, error.message);
+            throw error;
           }
