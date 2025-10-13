@@ -18,8 +18,13 @@ if ($cleanedPrefix -match '^(\d+\.\d+)\.?(\d*)$') {
 
 $url = "https://dotnet.microsoft.com/en-us/download/dotnet/$majorMinor"
 
-# Retry logic for web request with random delays
-$maxRetries = 5
+# Retry logic for web request with exponential backoff
+$maxRetries = 10
+$baseDelay = 2
+$maxDelay = 300
+# Calculate exponential factor: factor = exp(ln(maxDelay/baseDelay) / (maxRetries-1))
+# For 300 = 2 × factor^9: factor = exp(ln(150) / 9)
+$exponentialFactor = [Math]::Exp([Math]::Log($maxDelay / $baseDelay) / ($maxRetries - 1))
 $attempt = 0
 $response = $null
 
@@ -33,7 +38,11 @@ do {
         Write-Warning "Web request failed on attempt $attempt of $maxRetries`: $($_.Exception.Message)"
         
         if ($attempt -lt $maxRetries) {
-            $delay = Get-Random -Minimum 5 -Maximum 11
+            # Calculate exponential backoff delay, capped at maxDelay
+            $calculatedDelay = $baseDelay * [Math]::Pow($exponentialFactor, $attempt - 1)
+            $delay = [Math]::Min($calculatedDelay, $maxDelay)
+            $delay = [Math]::Round($delay, 1)
+            
             Write-Warning "Retrying in $delay seconds..."
             Start-Sleep -Seconds $delay
         }

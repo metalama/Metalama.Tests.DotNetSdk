@@ -54,7 +54,7 @@ jobs:
       uses: actions/checkout@v4
 
     # Determine the latest .NET SDK version from the download page because the dotnet-install.ps1 script does not
-    # always resolve to the latest version.
+    # always resolve to the latest version, e.g. when the "full version" has suffix, like in `10.0.100-rc.1.25451.107`.
     - name: Get exact .NET SDK version
       id: get-exact-version
       shell: pwsh
