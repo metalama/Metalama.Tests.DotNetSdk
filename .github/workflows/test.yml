@@ -13,16 +13,20 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
+        os: [ubuntu-24.04, ubuntu-24.04-arm, windows-2025, windows-11-arm, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
         dotnet-version: ['8.0', '9.0', '10.0' ]
         project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         exclude:
           - project-type: winforms # N/A
-            os: ubuntu-latest
+            os: ubuntu-24.04
+          - project-type: winforms # N/A
+            os: ubuntu-24.04-arm
           - project-type: winforms # N/A
             os: macos-15
           - project-type: wpf # N/A
-            os: ubuntu-latest
+            os: ubuntu-24.04
+          - project-type: wpf # N/A
+            os: ubuntu-24.04-arm
           - project-type: wpf # N/A
             os: macos-15
 
@@ -48,7 +52,7 @@ jobs:
     env:
       IS_POSTSHARP_OWNED: true
       TEAMCITY_CLOUD_TOKEN: ${{ secrets.TEAMCITY_CLOUD_TOKEN }}
-      ConsoleAnsi: ${{ (matrix.os == 'ubuntu-latest' || matrix.os == 'macos-15') && 'No' || 'Detect' }} # https://github.com/orgs/community/discussions/136868
+      ConsoleAnsi: ${{ (matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15') && 'No' || 'Detect' }} # https://github.com/orgs/community/discussions/136868
       MetalamaAssemblyLocatorHooksDirectory: '../..'
       CacheKeyPrefix: '100' # Increase this value to invalidate the cache.
 
@@ -130,7 +134,7 @@ jobs:
         java-version: ${{ matrix.dotnet-version == '6.0.4xx' && '11' || '17' }} # error XA0030: Building with JDK version `21.0.2` is not supported. Please install JDK version `11.0`.
 
     - name: Install Android SDK
-      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && (matrix.os == 'ubuntu-latest' || matrix.os == 'macos-15') && steps.cache-build.outputs.cache-hit != 'true'
+      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && (matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15') && steps.cache-build.outputs.cache-hit != 'true'
       uses: android-actions/setup-android@v3
       with:
           cmdline-tools-version: ${{ matrix.dotnet-version == '6.0.4xx' && '9862592' || '10406996' }} # Based on the Java version installed above. See https://github.com/android-actions/setup-android?tab=readme-ov-file#sdk-version-selection
@@ -167,7 +171,7 @@ jobs:
     - name: Install .NET Workloads
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor')  && steps.cache-build.outputs.cache-hit != 'true'
       shell: pwsh
-      run: dotnet workload install ${{ matrix.os == 'windows-latest' && 'maui' || 'maui-android' }}${{ matrix.os == 'macos-15' && ' && dotnet workload install maui-ios && dotnet workload install maui-maccatalyst' || '' }}
+      run: dotnet workload install ${{ (matrix.os == 'windows-2025' || matrix.os == 'windows-11-arm') && 'maui' || 'maui-android' }}${{ matrix.os == 'macos-15' && ' && dotnet workload install maui-ios && dotnet workload install maui-maccatalyst' || '' }}
 
     - name: Set ref version for Assembly Locator
       shell: pwsh
