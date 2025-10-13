@@ -1,0 +1,174 @@
+name: Test Results Summary
+
+on:
+  workflow_run:
+    workflows: ["Platform Integration Tests"]
+    types:
+      - completed
+
+jobs:
+  summarize:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion != 'cancelled'
+    
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write  # If you want to post to PRs
+      issues: write         # If you want to create issues for failures
+      
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Get workflow run details
+      id: workflow-details
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const runId = context.payload.workflow_run.id;
+          const { data: workflowRun } = await github.rest.actions.getWorkflowRun({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            run_id: runId
+          });
+          
+          const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            run_id: runId
+          });
+          
+          // Parse job names to extract matrix information
+          const results = jobs.jobs.map(job => {
+            // Job name format: "build (ubuntu-latest, 8.0.1xx, console)"
+            const match = job.name.match(/build \(([^,]+), ([^,]+), ([^)]+)\)/);
+            if (match) {
+              return {
+                os: match[1],
+                dotnetVersion: match[2], 
+                projectType: match[3],
+                status: job.conclusion,
+                duration: job.steps ? job.steps.reduce((total, step) => {
+                  if (step.started_at && step.completed_at) {
+                    const start = new Date(step.started_at);
+                    const end = new Date(step.completed_at);
+                    return total + (end - start);
+                  }
+                  return total;
+                }, 0) : 0,
+                url: job.html_url
+              };
+            }
+            return null;
+          }).filter(Boolean);
+          
+          return {
+            conclusion: workflowRun.conclusion,
+            results: results,
+            totalJobs: results.length,
+            successfulJobs: results.filter(r => r.status === 'success').length,
+            failedJobs: results.filter(r => r.status === 'failure').length,
+            cancelledJobs: results.filter(r => r.status === 'cancelled').length
+          };
+    
+    - name: Generate summary table
+      id: generate-summary
+      uses: actions/github-script@v7
+      env:
+        WORKFLOW_DATA: ${{ steps.workflow-details.outputs.result }}
+      with:
+        script: |
+          const data = JSON.parse(process.env.WORKFLOW_DATA);
+          const results = data.results;
+          
+          // Group results by OS and .NET version for better organization
+          const grouped = {};
+          results.forEach(result => {
+            const key = `${result.os}-${result.dotnetVersion}`;
+            if (!grouped[key]) {
+              grouped[key] = {
+                os: result.os,
+                dotnetVersion: result.dotnetVersion,
+                projects: []
+              };
+            }
+            grouped[key].projects.push(result);
+          });
+          
+          // Generate markdown table
+          let markdown = `# 🧪 Platform Integration Tests Summary\n\n`;
+          markdown += `**Overall Status:** ${data.conclusion === 'success' ? '✅ Success' : data.conclusion === 'failure' ? '❌ Failure' : '⚠️ ' + data.conclusion}\n`;
+          markdown += `**Total Jobs:** ${data.totalJobs} | **Successful:** ${data.successfulJobs} | **Failed:** ${data.failedJobs} | **Cancelled:** ${data.cancelledJobs}\n\n`;
+          
+          // Create detailed table
+          markdown += `## 📊 Detailed Results\n\n`;
+          markdown += `| OS | .NET Version | Project Type | Status | Duration |\n`;
+          markdown += `|---|---|---|---|---|\n`;
+          
+          Object.values(grouped).forEach(group => {
+            group.projects.forEach(project => {
+              const statusIcon = project.status === 'success' ? '✅' : 
+                               project.status === 'failure' ? '❌' : 
+                               project.status === 'cancelled' ? '⚠️' : '❓';
+              const duration = project.duration > 0 ? `${Math.round(project.duration / 1000)}s` : 'N/A';
+              const statusLink = `[${statusIcon} ${project.status}](${project.url})`;
+              
+              markdown += `| ${project.os} | ${project.dotnetVersion} | ${project.projectType} | ${statusLink} | ${duration} |\n`;
+            });
+          });
+          
+          // Add summary by OS
+          markdown += `\n## 🖥️ Summary by Operating System\n\n`;
+          const osSummary = {};
+          results.forEach(r => {
+            if (!osSummary[r.os]) osSummary[r.os] = { total: 0, success: 0, failure: 0 };
+            osSummary[r.os].total++;
+            if (r.status === 'success') osSummary[r.os].success++;
+            if (r.status === 'failure') osSummary[r.os].failure++;
+          });
+          
+          markdown += `| OS | Total | Success | Failed | Success Rate |\n`;
+          markdown += `|---|---|---|---|---|\n`;
+          Object.entries(osSummary).forEach(([os, stats]) => {
+            const rate = ((stats.success / stats.total) * 100).toFixed(1);
+            markdown += `| ${os} | ${stats.total} | ${stats.success} | ${stats.failure} | ${rate}% |\n`;
+          });
+          
+          // Add summary by .NET version
+          markdown += `\n## 🔢 Summary by .NET Version\n\n`;
+          const versionSummary = {};
+          results.forEach(r => {
+            if (!versionSummary[r.dotnetVersion]) versionSummary[r.dotnetVersion] = { total: 0, success: 0, failure: 0 };
+            versionSummary[r.dotnetVersion].total++;
+            if (r.status === 'success') versionSummary[r.dotnetVersion].success++;
+            if (r.status === 'failure') versionSummary[r.dotnetVersion].failure++;
+          });
+          
+          markdown += `| .NET Version | Total | Success | Failed | Success Rate |\n`;
+          markdown += `|---|---|---|---|---|\n`;
+          Object.entries(versionSummary).forEach(([version, stats]) => {
+            const rate = ((stats.success / stats.total) * 100).toFixed(1);
+            markdown += `| ${version} | ${stats.total} | ${stats.success} | ${stats.failure} | ${rate}% |\n`;
+          });
+          
+          core.setOutput('summary', markdown);
+          
+    - name: Post summary to job summary
+      run: |
+        echo '${{ steps.generate-summary.outputs.summary }}' >> $GITHUB_STEP_SUMMARY
+        
+    - name: Post summary as comment (if PR)
+      if: github.event.workflow_run.pull_requests[0]
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const summary = `${{ steps.generate-summary.outputs.summary }}`;
+          const prNumber = context.payload.workflow_run.pull_requests[0].number;
+          
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: prNumber,
+            body: summary
+          });
