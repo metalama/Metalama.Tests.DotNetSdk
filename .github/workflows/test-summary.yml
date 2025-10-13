@@ -88,6 +88,7 @@ jobs:
           
           return {
             conclusion: workflowRun.conclusion,
+            branch: workflowRun.head_branch,
             results: results,
             totalJobs: results.length,
             successfulJobs: results.filter(r => r.status === 'success').length,
@@ -122,7 +123,7 @@ jobs:
           const allProjectTypes = [...new Set(results.map(r => r.projectType))].sort();
           
           // Generate markdown
-          let markdown = `# 🧪 Platform Integration Tests Summary\n\n`;
+          let markdown = `# 🧪 Platform Integration Tests Summary - ${data.branch}\n\n`;
           markdown += `**Overall Status:** ${data.conclusion === 'success' ? '✅ Success' : data.conclusion === 'failure' ? '❌ Failure' : '⚠️ ' + data.conclusion}\n`;
           markdown += `**Total Jobs:** ${data.totalJobs} | **Successful:** ${data.successfulJobs} | **Failed:** ${data.failedJobs} | **Cancelled:** ${data.cancelledJobs}\n\n`;
           
