@@ -39,6 +39,15 @@ do {
             'User-Agent' = 'PowerShell-Script'
             'Accept' = 'application/vnd.github.v3+json'
         }
+        
+        # Add Authorization header if GITHUB_TOKEN environment variable is available
+        if ($env:GITHUB_TOKEN) {
+            $headers['Authorization'] = "Bearer $env:GITHUB_TOKEN"
+            Write-Host "::notice::Using GITHUB_TOKEN for authentication"
+        } else {
+            Write-Host "::notice::No GITHUB_TOKEN found, using unauthenticated requests (subject to rate limits)"
+        }
+        
         $releases = Invoke-RestMethod -Uri $url -Headers $headers -UseBasicParsing
         break
     }
