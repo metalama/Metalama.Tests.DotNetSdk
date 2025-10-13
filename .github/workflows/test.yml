@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
-        dotnet-version: ['8.0.1xx:ga', '8.0.4xx:ga', '9.0.1xx:ga', '9.0.3xx:ga', '10.0.1xx:preview' ]
+        dotnet-version: ['8.0.1xx', '8.0.4xx', '9.0.1xx', '9.0.3xx', '10.0.1xx' ]
         project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         exclude:
           - project-type: winforms # N/A
@@ -28,11 +28,11 @@ jobs:
 
           # Blazor does not work in Metalama 2025.1 because its source generators require Roslyn 5.0.
           - project-type: blazor
-            dotnet-version: 10.0.1xx:preview
+            dotnet-version: 10.0.1xx
           - project-type: maui-blazor
-            dotnet-version: 10.0.1xx:preview
+            dotnet-version: 10.0.1xx
           - project-type: blazorwasm 
-            dotnet-version: 10.0.1xx:preview
+            dotnet-version: 10.0.1xx
       fail-fast: false # Don't stop other jobs if one fails.
       max-parallel: 8 # Give a chance to stop early when we run manually.
 
@@ -50,33 +50,18 @@ jobs:
 
     steps:
 
-    - name: Parse .NET version and quality
-      id: parse-dotnet
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # Determine the latest .NET SDK version from the download page because the dotnet-install.ps1 script does not
+    # always resolve to the latest version.
+    - name: Get exact .NET SDK version
+      id: get-exact-version
       shell: pwsh
       run: |
-        $parts = "${{ matrix.dotnet-version }}" -split ":"
-        "dotnet-version=$($parts[0])" >> $env:GITHUB_OUTPUT
-        "dotnet-quality=$($parts[1])" >> $env:GITHUB_OUTPUT
-
-    # global.json must be present for setup-dotnet to work.        
-    - name: Create temporary global.json
-      id: create-temp-global-json
-      shell: pwsh
-      run: |
-        $globalJson = @{
-          sdk = @{
-            version = "${{ steps.parse-dotnet.outputs.dotnet-version }}"
-          }
-        }
-        $globalJson | ConvertTo-Json -Depth 3 | Set-Content -Path "./global.json"
-
-
-    - name: Install .NET For The Test
-      uses: actions/setup-dotnet@v5
-      id: setup-dotnet
-      with:
-        dotnet-version: ${{ steps.parse-dotnet.outputs.dotnet-version }}
-        dotnet-quality: ${{ steps.parse-dotnet.outputs.dotnet-quality }}        
+        $exactVersion = .\.github\workflows\GetLatestVersion.ps1 -VersionPrefix "${{ matrix.dotnet-version }}"
+        "exact-version=$exactVersion" >> $env:GITHUB_OUTPUT
+        Write-Host "Resolved ${{ matrix.dotnet-version }} to $exactVersion"
 
     - name: Restore build cache
       id: cache-build
@@ -84,7 +69,27 @@ jobs:
       with:
         path: |
           ./.build-cache
-        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ matrix.project-type }}
+        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ steps.get-exact-version.outputs.exact-version }}-${{ matrix.project-type }}
+
+    # global.json must be present for setup-dotnet to work.        
+    - name: Create temporary global.json
+      id: create-temp-global-json
+      if: steps.cache-build.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: |
+        $globalJson = @{
+          sdk = @{
+            version = "${{ steps.get-exact-version.outputs.exact-version }}"
+          }
+        }
+        $globalJson | ConvertTo-Json -Depth 3 | Set-Content -Path "./global.json"
+
+    - name: Install .NET For The Test
+      uses: actions/setup-dotnet@v5
+      id: setup-dotnet
+      if: steps.cache-build.outputs.cache-hit != 'true'
+      with:
+        dotnet-version: ${{ steps.get-exact-version.outputs.exact-version }}
 
     - name: Checkout
       uses: actions/checkout@v4
@@ -103,7 +108,7 @@ jobs:
       shell: pwsh
       if: steps.cache-build.outputs.cache-hit != 'true'
       run: |
-        $version = "${{ steps.parse-dotnet.outputs.dotnet-version }}"
+        $version = "${{ steps.get-exact-version.outputs.exact-version }}"
         $cleanedVersion = $version -replace '-servicing.*', ''
         echo "DOTNET_CLEANED_VERSION=$cleanedVersion" >> $env:GITHUB_ENV
         echo "Cleaned version: $cleanedVersion"
@@ -111,7 +116,7 @@ jobs:
     - name: Configure the dependency to Metalama
       shell: pwsh
       if: steps.cache-build.outputs.cache-hit != 'true'
-      run: ./Build.ps1 dependencies set BuildServer Metalama --branch ${{github.ref_name}} --nologo
+      run: ./Build.ps1 dependencies set BuildServer Metalama --branch ${{github.ref_name}} --nologo --no-progress
 
     - name: Install Java
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && steps.cache-build.outputs.cache-hit != 'true'

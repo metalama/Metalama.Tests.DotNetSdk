@@ -1,0 +1,66 @@
+# Get the latest .NET SDK version from Microsoft download page
+param(
+    [Parameter(Mandatory=$true)]
+    [string]$VersionPrefix
+)
+
+# Clean up version prefix by trimming trailing dots and x's
+$cleanedPrefix = $VersionPrefix.TrimEnd('.', 'x', 'X')
+
+# Parse version prefix to determine major.minor and optional feature band
+if ($cleanedPrefix -match '^(\d+\.\d+)\.?(\d*)$') {
+    $majorMinor = $matches[1]
+    $featureBand = $matches[2]
+} else {
+    Write-Error "Invalid version prefix format. Use format like '8.0', '9.0', '8.0.1xxx', '8.0.1xx', etc."
+    exit 1
+}
+
+$url = "https://dotnet.microsoft.com/en-us/download/dotnet/$majorMinor"
+$response = Invoke-WebRequest -Uri $url -UseBasicParsing
+$content = $response.Content
+
+# Create more precise regex pattern based on version prefix
+if ($featureBand) {
+    # Match specific feature band (e.g., 8.0.1xx)
+    $pattern = "\b($majorMinor\.$featureBand\d{2}(?:-[a-zA-Z]+(?:\.\d+)?)?)\b"
+} else {
+    # Match any version in major.minor (e.g., 8.0.xxx)
+    $pattern = "\b($majorMinor\.\d{3}(?:-[a-zA-Z]+(?:\.\d+)?)?)\b"
+}
+
+$regexMatches = [regex]::Matches($content, $pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+
+$versions = @()
+foreach ($match in $regexMatches) {
+    $version = $match.Groups[1].Value
+    # Validate it's a proper version format
+    if ($version -match '^\d+\.\d+\.\d+(?:-[a-zA-Z]+(?:\.\d+)?)?$') {
+        $versions += $version
+    }
+}
+
+if ($versions.Count -eq 0) {
+    Write-Error "No .NET SDK versions found matching pattern '$VersionPrefix'"
+    exit 1
+}
+
+# Sort versions properly (stable versions come after pre-release)
+$latestVersion = $versions | Sort-Object -Unique | Sort-Object {
+    if ($_ -match '^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$') {
+        $major = [int]$matches[1]
+        $minor = [int]$matches[2] 
+        $build = [int]$matches[3]
+        $prerelease = $matches[4]
+        
+        # Sort stable versions (no prerelease) last, then by prerelease type
+        $prereleaseWeight = if (-not $prerelease) { 999 } 
+                           elseif ($prerelease -like "rc*") { 100 }
+                           else { 0 }  # preview versions
+        
+        return @($major, $minor, $build, $prereleaseWeight)
+    }
+    return @(0, 0, 0, 0)
+} | Select-Object -Last 1
+
+Write-Output $latestVersion
