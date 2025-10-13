@@ -172,7 +172,7 @@ jobs:
                   markdown += ` ${statusText} |`;
                 } else {
                   // No result for this combination (likely excluded or skipped)
-                  markdown += ` ⏭️ |`;
+                  markdown += ` 🚫 |`;
                 }
               });
               
