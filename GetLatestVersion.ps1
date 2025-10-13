@@ -17,7 +17,32 @@ if ($cleanedPrefix -match '^(\d+\.\d+)\.?(\d*)$') {
 }
 
 $url = "https://dotnet.microsoft.com/en-us/download/dotnet/$majorMinor"
-$response = Invoke-WebRequest -Uri $url -UseBasicParsing
+
+# Retry logic for web request with random delays
+$maxRetries = 5
+$attempt = 0
+$response = $null
+
+do {
+    $attempt++
+    try {
+        $response = Invoke-WebRequest -Uri $url -UseBasicParsing
+        break
+    }
+    catch {
+        Write-Warning "Web request failed on attempt $attempt of $maxRetries`: $($_.Exception.Message)"
+        
+        if ($attempt -lt $maxRetries) {
+            $delay = Get-Random -Minimum 5 -Maximum 11
+            Write-Warning "Retrying in $delay seconds..."
+            Start-Sleep -Seconds $delay
+        }
+        else {
+            throw "All $maxRetries attempts failed. Last error: $($_.Exception.Message)"
+        }
+    }
+} while ($attempt -lt $maxRetries)
+
 $content = $response.Content
 
 # Create more comprehensive regex pattern to capture full version strings including build numbers
