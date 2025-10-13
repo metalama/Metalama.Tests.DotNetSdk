@@ -188,34 +188,54 @@ jobs:
           // Summary by .NET version
           const versionSummary = {};
           results.forEach(r => {
-            if (!versionSummary[r.dotnetVersion]) versionSummary[r.dotnetVersion] = { total: 0, success: 0, failure: 0, cancelled: 0 };
+            if (!versionSummary[r.dotnetVersion]) versionSummary[r.dotnetVersion] = { total: 0, success: 0, failure: 0, cancelled: 0, skipped: 0 };
             versionSummary[r.dotnetVersion].total++;
             if (r.status === 'success') versionSummary[r.dotnetVersion].success++;
             if (r.status === 'failure') versionSummary[r.dotnetVersion].failure++;
             if (r.status === 'cancelled') versionSummary[r.dotnetVersion].cancelled++;
+            if (r.status === 'skipped') versionSummary[r.dotnetVersion].skipped++;
           });
           
-          markdown += `| .NET Version | Total | ✅ Success | ❌ Failed | ⚠️ Cancelled | Success Rate |\n`;
-          markdown += `|---|---|---|---|---|---|\n`;
+          // Calculate expected total jobs per version (accounting for matrix exclusions)
+          const expectedJobsPerVersion = allOS.length * allProjectTypes.length;
+          
+          markdown += `| .NET Version | Total | ✅ Success | ❌ Failed | ⚠️ Cancelled | 🚫 Skipped | Success Rate |\n`;
+          markdown += `|---|---|---|---|---|---|---|\n`;
           Object.entries(versionSummary).forEach(([version, stats]) => {
-            const rate = stats.total > 0 ? ((stats.success / stats.total) * 100).toFixed(1) : '0.0';
-            markdown += `| ${version} | ${stats.total} | ${stats.success} | ${stats.failure} | ${stats.cancelled} | ${rate}% |\n`;
+            // Calculate skipped as difference between expected and actual (excluding explicit skipped status)
+            const actualRun = stats.success + stats.failure + stats.cancelled;
+            const calculatedSkipped = Math.max(0, expectedJobsPerVersion - actualRun);
+            const totalSkipped = stats.skipped + calculatedSkipped;
+            
+            const rate = actualRun > 0 ? ((stats.success / actualRun) * 100).toFixed(1) : '0.0';
+            markdown += `| ${version} | ${stats.total} | ${stats.success} | ${stats.failure} | ${stats.cancelled} | ${totalSkipped} | ${rate}% |\n`;
           });
           
           // Summary by OS
-          markdown += `\n| Operating System | Total | ✅ Success | ❌ Failed | ⚠️ Cancelled | Success Rate |\n`;
-          markdown += `|---|---|---|---|---|---|\n`;
+          markdown += `\n| Operating System | Total | ✅ Success | ❌ Failed | ⚠️ Cancelled | 🚫 Skipped | Success Rate |\n`;
+          markdown += `|---|---|---|---|---|---|---|\n`;
           const osSummary = {};
           results.forEach(r => {
-            if (!osSummary[r.os]) osSummary[r.os] = { total: 0, success: 0, failure: 0, cancelled: 0 };
+            if (!osSummary[r.os]) osSummary[r.os] = { total: 0, success: 0, failure: 0, cancelled: 0, skipped: 0 };
             osSummary[r.os].total++;
             if (r.status === 'success') osSummary[r.os].success++;
             if (r.status === 'failure') osSummary[r.os].failure++;
             if (r.status === 'cancelled') osSummary[r.os].cancelled++;
+            if (r.status === 'skipped') osSummary[r.os].skipped++;
           });
+          
+          // Calculate expected total jobs per OS (accounting for matrix exclusions)
+          const dotnetVersions = [...new Set(results.map(r => r.dotnetVersion))];
+          const expectedJobsPerOS = dotnetVersions.length * allProjectTypes.length;
+          
           Object.entries(osSummary).forEach(([os, stats]) => {
-            const rate = stats.total > 0 ? ((stats.success / stats.total) * 100).toFixed(1) : '0.0';
-            markdown += `| ${os} | ${stats.total} | ${stats.success} | ${stats.failure} | ${stats.cancelled} | ${rate}% |\n`;
+            // Calculate skipped as difference between expected and actual (excluding explicit skipped status)
+            const actualRun = stats.success + stats.failure + stats.cancelled;
+            const calculatedSkipped = Math.max(0, expectedJobsPerOS - actualRun);
+            const totalSkipped = stats.skipped + calculatedSkipped;
+            
+            const rate = actualRun > 0 ? ((stats.success / actualRun) * 100).toFixed(1) : '0.0';
+            markdown += `| ${os} | ${stats.total} | ${stats.success} | ${stats.failure} | ${stats.cancelled} | ${totalSkipped} | ${rate}% |\n`;
           });
           
           // Write summary to file instead of output to avoid GitHub Actions limitations
