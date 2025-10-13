@@ -59,7 +59,7 @@ jobs:
       id: get-exact-version
       shell: pwsh
       run: |
-        $exactVersion = .\.github\workflows\GetLatestVersion.ps1 -VersionPrefix "${{ matrix.dotnet-version }}"
+        $exactVersion = .\GetLatestVersion.ps1 -VersionPrefix "${{ matrix.dotnet-version }}"
         "exact-version=$exactVersion" >> $env:GITHUB_OUTPUT
         Write-Host "Resolved ${{ matrix.dotnet-version }} to $exactVersion"
 

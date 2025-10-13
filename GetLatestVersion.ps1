@@ -20,13 +20,13 @@ $url = "https://dotnet.microsoft.com/en-us/download/dotnet/$majorMinor"
 $response = Invoke-WebRequest -Uri $url -UseBasicParsing
 $content = $response.Content
 
-# Create more precise regex pattern based on version prefix
+# Create more comprehensive regex pattern to capture full version strings including build numbers
 if ($featureBand) {
-    # Match specific feature band (e.g., 8.0.1xx)
-    $pattern = "\b($majorMinor\.$featureBand\d{2}(?:-[a-zA-Z]+(?:\.\d+)?)?)\b"
+    # Match specific feature band with full build numbers (e.g., 8.0.1xx-rc.1.25451.107)
+    $pattern = "\b($majorMinor\.$featureBand\d{2}(?:-[a-zA-Z]+(?:\.\d+)*)?)\b"
 } else {
-    # Match any version in major.minor (e.g., 8.0.xxx)
-    $pattern = "\b($majorMinor\.\d{3}(?:-[a-zA-Z]+(?:\.\d+)?)?)\b"
+    # Match any version in major.minor with full build numbers (e.g., 8.0.xxx-rc.1.25451.107)
+    $pattern = "\b($majorMinor\.\d{3}(?:-[a-zA-Z]+(?:\.\d+)*)?)\b"
 }
 
 $regexMatches = [regex]::Matches($content, $pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
@@ -34,8 +34,8 @@ $regexMatches = [regex]::Matches($content, $pattern, [System.Text.RegularExpress
 $versions = @()
 foreach ($match in $regexMatches) {
     $version = $match.Groups[1].Value
-    # Validate it's a proper version format
-    if ($version -match '^\d+\.\d+\.\d+(?:-[a-zA-Z]+(?:\.\d+)?)?$') {
+    # Validate it's a proper version format (allow full version with multiple build number segments)
+    if ($version -match '^\d+\.\d+\.\d+(?:-[a-zA-Z]+(?:\.\d+)*)?$') {
         $versions += $version
     }
 }
