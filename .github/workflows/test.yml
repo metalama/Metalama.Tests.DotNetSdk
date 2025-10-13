@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
-        dotnet-version: ['8.0.1xx', '8.0.4xx', '9.0.1xx', '9.0.3xx', '10.0.1xx' ]
+        dotnet-version: ['8.0', '9.0', '10.0' ]
         project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         exclude:
           - project-type: winforms # N/A
@@ -28,15 +28,15 @@ jobs:
 
           # Blazor and Razor does not work in Metalama 2025.1 because its source generators require Roslyn 5.0.
           - project-type: blazor
-            dotnet-version: 10.0.1xx
+            dotnet-version: 10.0
           - project-type: maui-blazor
-            dotnet-version: 10.0.1xx
+            dotnet-version: 10.0
           - project-type: blazorwasm 
-            dotnet-version: 10.0.1xx
+            dotnet-version: 10.0
           - project-type: razor 
-            dotnet-version: 10.0.1xx
+            dotnet-version: 10.0
           - project-type: mvc
-            dotnet-version: 10.0.1xx
+            dotnet-version: 10.0
       fail-fast: false # Don't stop other jobs if one fails.
       max-parallel: 8 # Give a chance to stop early when we run manually.
 
