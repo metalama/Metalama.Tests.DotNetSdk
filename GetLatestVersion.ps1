@@ -18,41 +18,76 @@ if ($cleanedPrefix -match '^(\d+\.\d+)\.?(\d*)$') {
 
 $url = "https://dotnet.microsoft.com/en-us/download/dotnet/$majorMinor"
 
-# Retry logic for web request with exponential backoff
-$maxRetries = 10
-$baseDelay = 2
-$maxDelay = 300
-# Calculate exponential factor: factor = exp(ln(maxDelay/baseDelay) / (maxRetries-1))
-# For 300 = 2 × factor^9: factor = exp(ln(150) / 9)
-$exponentialFactor = [Math]::Exp([Math]::Log($maxDelay / $baseDelay) / ($maxRetries - 1))
-$attempt = 0
-$response = $null
+# GitHub Actions cache configuration
+$cacheDir = ".dotnet-cache"
+$cacheFile = Join-Path $cacheDir "dotnet-$($majorMinor -replace '\.', '-').html"
+$cacheLifetimeHours = 2
 
-do {
-    $attempt++
-    try {
-        $response = Invoke-WebRequest -Uri $url -UseBasicParsing
-        break
+# Create cache directory if it doesn't exist
+if (-not (Test-Path $cacheDir)) {
+    New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+}
+
+$content = $null
+$useCache = $false
+
+# Check if cache file exists and is still valid (within 2 hours)
+if (Test-Path $cacheFile) {
+    $cacheAge = (Get-Date) - (Get-Item $cacheFile).LastWriteTime
+    
+    if ($cacheAge.TotalHours -lt $cacheLifetimeHours) {
+        Write-Host "::notice::Using cached .NET $majorMinor download page (cached $([math]::Round($cacheAge.TotalMinutes, 1)) minutes ago)"
+        $content = Get-Content $cacheFile -Raw -Encoding UTF8
+        $useCache = $true
+    } else {
+        Write-Host "::notice::Cache expired for .NET $majorMinor (age: $([math]::Round($cacheAge.TotalHours, 1)) hours)"
     }
-    catch {
-        Write-Warning "Web request failed on attempt $attempt of $maxRetries`: $($_.Exception.Message)"
-        
-        if ($attempt -lt $maxRetries) {
-            # Calculate exponential backoff delay, capped at maxDelay
-            $calculatedDelay = $baseDelay * [Math]::Pow($exponentialFactor, $attempt - 1)
-            $delay = [Math]::Min($calculatedDelay, $maxDelay)
-            $delay = [Math]::Round($delay, 1)
+}
+
+# If no valid cache, fetch from web with retry logic and cache the result
+if (-not $useCache) {
+    Write-Host "::notice::Fetching .NET $majorMinor download page from Microsoft..."
+    
+    # Retry logic for web request with exponential backoff
+    $maxRetries = 10
+    $baseDelay = 2
+    $maxDelay = 300
+    # Calculate exponential factor: factor = exp(ln(maxDelay/baseDelay) / (maxRetries-1))
+    # For 300 = 2 × factor^9: factor = exp(ln(150) / 9)
+    $exponentialFactor = [Math]::Exp([Math]::Log($maxDelay / $baseDelay) / ($maxRetries - 1))
+    $attempt = 0
+    $response = $null
+
+    do {
+        $attempt++
+        try {
+            $response = Invoke-WebRequest -Uri $url -UseBasicParsing
+            break
+        }
+        catch {
+            Write-Warning "Web request failed on attempt $attempt of $maxRetries`: $($_.Exception.Message)"
             
-            Write-Warning "Retrying in $delay seconds..."
-            Start-Sleep -Seconds $delay
+            if ($attempt -lt $maxRetries) {
+                # Calculate exponential backoff delay, capped at maxDelay
+                $calculatedDelay = $baseDelay * [Math]::Pow($exponentialFactor, $attempt - 1)
+                $delay = [Math]::Min($calculatedDelay, $maxDelay)
+                $delay = [Math]::Round($delay, 1)
+                
+                Write-Warning "Retrying in $delay seconds..."
+                Start-Sleep -Seconds $delay
+            }
+            else {
+                throw "All $maxRetries attempts failed. Last error: $($_.Exception.Message)"
+            }
         }
-        else {
-            throw "All $maxRetries attempts failed. Last error: $($_.Exception.Message)"
-        }
-    }
-} while ($attempt -lt $maxRetries)
+    } while ($attempt -lt $maxRetries)
 
-$content = $response.Content
+    $content = $response.Content
+    
+    # Save content to cache
+    $content | Set-Content $cacheFile -Encoding UTF8
+    Write-Host "::notice::Cached .NET $majorMinor download page (expires in $cacheLifetimeHours hours)"
+}
 
 # Create more comprehensive regex pattern to capture full version strings including build numbers
 if ($featureBand) {
