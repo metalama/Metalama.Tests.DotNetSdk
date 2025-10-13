@@ -167,7 +167,7 @@ jobs:
                   const statusIcon = result.status === 'success' ? '✅' : 
                                    result.status === 'failure' ? '❌' : 
                                    result.status === 'cancelled' ? '⚠️' : 
-                                   result.status === 'skipped' ? '⏭️' : '❓';
+                                   result.status === 'skipped' ? '🚫' : '❓';
                   const statusText = `[${statusIcon}](${result.url})`;
                   markdown += ` ${statusText} |`;
                 } else {
