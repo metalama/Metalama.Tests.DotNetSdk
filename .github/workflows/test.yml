@@ -57,16 +57,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Cache .NET download pages
-      uses: actions/cache@v4
-      with:
-        path: .dotnet-cache
-        key: dotnet-cache-${{ hashFiles('GetLatestVersion.ps1') }}-${{ matrix.dotnet-version }}
-        restore-keys: |
-          dotnet-cache-${{ hashFiles('GetLatestVersion.ps1') }}-
-          dotnet-cache-
-
-    # Determine the latest .NET SDK version from the download page because the dotnet-install.ps1 script does not
+    # Determine the latest .NET SDK version from GitHub API because the dotnet-install.ps1 script does not
     # always resolve to the latest version, e.g. when the "full version" has suffix, like in `10.0.100-rc.1.25451.107`.
     - name: Get exact .NET SDK version
       id: get-exact-version
