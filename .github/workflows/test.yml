@@ -31,13 +31,17 @@ jobs:
           - project-type: wpf # N/A
             os: macos-15
 
-          # MAUI is not available on Ubuntu ARM because Android SDK cannot be installed
+          # MAUI is not available on ARM because Android SDK cannot be installed
           - project-type: maui
             os:  ubuntu-24.04-arm
           - project-type: maui-blazor
             os:  ubuntu-24.04-arm
-
-          # Blazor and Razor does not work in Metalama 2025.1 because its source generators require Roslyn 5.0.
+          - project-type: maui
+            os:  windows-11-arm
+          - project-type: maui-blazor
+            os:  windows-11-arm
+          
+            # Blazor and Razor does not work in Metalama 2025.1 because its source generators require Roslyn 5.0.
           - project-type: blazor
             dotnet-version: 10.0
           - project-type: maui-blazor
