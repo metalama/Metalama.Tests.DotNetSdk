@@ -14,9 +14,11 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
+        architecture: [amd64, arm64]
         dotnet-version: ['8.0', '9.0', '10.0' ]
         project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         exclude:
+          # WinForms and WPF are Windows-only
           - project-type: winforms # N/A
             os: ubuntu-latest
           - project-type: winforms # N/A
@@ -42,7 +44,7 @@ jobs:
 
     timeout-minutes: 60
 
-    runs-on: ${{ matrix.os }}  # For a list of available runner types, refer to
+    runs-on: ${{ matrix.architecture == 'amd64' && matrix.os || format('{0}-{1}', matrix.os, matrix.architecture) }}  # For a list of available runner types, refer to
                                # https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on
 
     env:
@@ -73,7 +75,7 @@ jobs:
       with:
         path: |
           ./.build-cache
-        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ steps.get-exact-version.outputs.exact-version }}-${{ matrix.project-type }}
+        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ matrix.architecture }}-${{ steps.get-exact-version.outputs.exact-version }}-${{ matrix.project-type }}
 
     # global.json must be present for setup-dotnet to work.        
     - name: Create temporary global.json
@@ -136,7 +138,7 @@ jobs:
           cmdline-tools-version: ${{ matrix.dotnet-version == '6.0.4xx' && '9862592' || '10406996' }} # Based on the Java version installed above. See https://github.com/android-actions/setup-android?tab=readme-ov-file#sdk-version-selection
   
     - name: Install Android SDK Tools
-      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
+      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15' && steps.cache-build.outputs.cache-hit != 'true'
       run: sdkmanager "build-tools;32.0.0" "platforms;android-34"
 
     - name: Download Metalama and create global.json
@@ -146,12 +148,12 @@ jobs:
 
     - name: Install Xcode
       uses: maxim-lobanov/setup-xcode@v1
-      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
+      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15' && steps.cache-build.outputs.cache-hit != 'true'
       with:
         xcode-version: '16'
 
     - name: Configure Xcode
-      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
+      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15' && steps.cache-build.outputs.cache-hit != 'true'
       run: |
         sudo xcodebuild -license accept
         sudo xcodebuild -runFirstLaunch
@@ -205,4 +207,4 @@ jobs:
       uses: actions/cache/save@v4
       with:
         path: ./.build-cache
-        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ matrix.project-type }}
+        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ matrix.architecture }}-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ matrix.project-type }}
