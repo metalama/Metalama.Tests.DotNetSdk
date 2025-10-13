@@ -139,11 +139,6 @@ jobs:
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
       run: sdkmanager "build-tools;32.0.0" "platforms;android-34"
 
-    - name: Add NuGet Feed # https://github.com/dotnet/sdk/issues/43050 TODO: Remove after .NET 9 GA
-      if: matrix.dotnet-version == '9.0.1xx' && matrix.project-type == 'blazorwasm' &&  steps.cache-build.outputs.cache-hit != 'true'
-      shell: pwsh
-      run: dotnet new nugetconfig && dotnet nuget add source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json -n dotnet9 --configfile ./nuget.config
-
     - name: Download Metalama and create global.json
       if: steps.cache-build.outputs.cache-hit != 'true'
       shell: pwsh
