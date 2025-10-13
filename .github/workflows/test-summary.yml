@@ -127,8 +127,29 @@ jobs:
           markdown += `**Overall Status:** ${data.conclusion === 'success' ? '✅ Success' : data.conclusion === 'failure' ? '❌ Failure' : '⚠️ ' + data.conclusion}\n`;
           markdown += `**Total Jobs:** ${data.totalJobs} | **Successful:** ${data.successfulJobs} | **Failed:** ${data.failedJobs} | **Cancelled:** ${data.cancelledJobs}\n\n`;
           
-          // Create one table per .NET version
-          Object.keys(versionGroups).sort().forEach(dotnetVersion => {
+          // Create one table per .NET version (sorted by version, not alphabetically)
+          Object.keys(versionGroups).sort((a, b) => {
+            // Parse version strings for proper numeric comparison
+            const parseVersion = (version) => {
+              const parts = version.split('.').map(part => parseInt(part, 10) || 0);
+              return parts;
+            };
+            
+            const versionA = parseVersion(a);
+            const versionB = parseVersion(b);
+            
+            // Compare each part of the version
+            for (let i = 0; i < Math.max(versionA.length, versionB.length); i++) {
+              const partA = versionA[i] || 0;
+              const partB = versionB[i] || 0;
+              
+              if (partA !== partB) {
+                return partA - partB;  // Ascending order
+              }
+            }
+            
+            return 0;  // Versions are equal
+          }).forEach(dotnetVersion => {
             markdown += `## � .NET ${dotnetVersion}\n\n`;
             
             // Table header
@@ -150,8 +171,8 @@ jobs:
                   const statusText = `[${statusIcon}](${result.url})`;
                   markdown += ` ${statusText} |`;
                 } else {
-                  // No result for this combination (likely excluded)
-                  markdown += ` ➖ |`;
+                  // No result for this combination (likely excluded or skipped)
+                  markdown += ` ⏭️ |`;
                 }
               });
               
