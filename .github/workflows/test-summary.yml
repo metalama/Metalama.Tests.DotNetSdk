@@ -9,15 +9,27 @@ on:
 jobs:
   summarize:
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion != 'cancelled'
     
     permissions:
       actions: read
       contents: read
-      pull-requests: write  # If you want to post to PRs
       issues: write         # If you want to create issues for failures
       
     steps:
+    - name: Debug workflow run event
+      uses: actions/github-script@v7
+      with:
+        script: |
+          console.log('=== WORKFLOW RUN DEBUG INFO ===');
+          console.log('Event name:', context.eventName);
+          console.log('Workflow run ID:', context.payload.workflow_run?.id);
+          console.log('Workflow run conclusion:', context.payload.workflow_run?.conclusion);
+          console.log('Workflow run status:', context.payload.workflow_run?.status);
+          console.log('Workflow run head branch:', context.payload.workflow_run?.head_branch);
+          console.log('Workflow run name:', context.payload.workflow_run?.name);
+          console.log('Repository:', context.repo);
+          console.log('Full payload:', JSON.stringify(context.payload, null, 2));
+    
     - name: Checkout
       uses: actions/checkout@v4
       
