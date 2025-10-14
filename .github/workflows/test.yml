@@ -2,6 +2,9 @@ name: Platform Integration Tests
 
 on:
   workflow_dispatch:
+
+env:
+  SUMMARY_ISSUE_NUMBER: 3  # Issue number for this branch
 jobs:
 
   build:
@@ -244,26 +247,11 @@ jobs:
       with:
         script: |
           const branch = context.ref.replace('refs/heads/', '');
-          
-          // Branch to issue number mapping
-          const branchIssueMap = {
-            'develop/2025.1': 3,
-            'develop/2026.0': 4
-          };
-          
-          const issueNumber = branchIssueMap[branch];
+          const issueNumber = process.env.SUMMARY_ISSUE_NUMBER;
           
           console.log(`Branch: ${branch}`);
           console.log(`Issue number: ${issueNumber}`);
-          
-          if (!issueNumber) {
-            console.error(`❌ Branch '${branch}' is not configured for test summaries.`);
-            console.error(`Supported branches:`);
-            Object.entries(branchIssueMap).forEach(([br, num]) => {
-              console.error(`  ${br} -> Issue #${num}`);
-            });
-            return; // Don't fail, just skip
-          }
+        
           
           // Get current workflow run details
           const { data: workflowRun } = await github.rest.actions.getWorkflowRun({
@@ -381,10 +369,10 @@ jobs:
                   const statusIcon = result.status === 'success' ? '✅' : 
                                    result.status === 'failure' ? '❌' : 
                                    result.status === 'cancelled' ? '⚠️' : 
-                                   result.status === 'skipped' ? '⏭️' : '❓';
+                                   result.status === 'skipped' ? '🚫' : '❓';
                   markdown += ` [${statusIcon}](${result.url}) |`;
                 } else {
-                  markdown += ` ⏭️ |`;
+                  markdown += ` 🚫 |`;
                 }
               });
               
