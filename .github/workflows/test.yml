@@ -319,7 +319,6 @@ jobs:
           
           // Generate markdown summary
           let markdown = `# 🧪 Platform Integration Tests Summary - ${branch}\n\n`;
-          markdown += `**Overall Status:** ${workflowRun.conclusion === 'success' ? '✅ Success' : workflowRun.conclusion === 'failure' ? '❌ Failure' : '⚠️ ' + workflowRun.conclusion}\n`;
           markdown += `**Total Jobs:** ${totalJobs} | **Successful:** ${successfulJobs} | **Failed:** ${failedJobs} | **Cancelled:** ${cancelledJobs}\n\n`;
           
           // Create tables per .NET version (sorted properly)
