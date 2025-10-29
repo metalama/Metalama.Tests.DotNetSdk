@@ -11,7 +11,7 @@
 
     <!-- Set versions of dependencies. -->
     <PropertyGroup>
-        <PostSharpEngineeringVersion>2023.2.270</PostSharpEngineeringVersion>
+        <PostSharpEngineeringVersion>2023.2.271</PostSharpEngineeringVersion>
     </PropertyGroup>
 
     <!-- Set the deafult versions of auto-updated dependencies -->
