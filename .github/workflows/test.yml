@@ -156,7 +156,7 @@ jobs:
       uses: maxim-lobanov/setup-xcode@v1
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
       with:
-        xcode-version: '16'
+        xcode-version: '26'
 
     - name: Configure Xcode
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
