@@ -163,13 +163,13 @@ jobs:
     - name: Download Metalama and create global.json
       if: steps.cache-build.outputs.cache-hit != 'true'
       shell: pwsh
-      run: ./Build.ps1 prepare --sdk-version ${{ env.DOTNET_CLEANED_VERSION }} --nologo --no-progress; type global.json
+      run: ./Build.ps1 prepare --sdk-version ${{ env.DOTNET_CLEANED_VERSION }} --nologo --no-progress; type global.json; type nuget.config;
 
     - name: Install Xcode
       uses: maxim-lobanov/setup-xcode@v1
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
       with:
-        xcode-version: '26'
+        xcode-version: ${{ matrix.dotnet-version == '10.0' && '16.1' || '15.4' }}
 
     - name: Configure Xcode
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
