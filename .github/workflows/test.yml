@@ -13,8 +13,7 @@ jobs:
 
     strategy:
       matrix:
-        # os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
-        os: [macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
         dotnet-version: ['8.0', '9.0', '10.0' ]
         project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         exclude:
