@@ -7,6 +7,6 @@ internal class IntroduceClassAttribute : CompilationAspect
 {
     public override void BuildAspect(IAspectBuilder<ICompilation> builder)
     {
-        builder.Advice.IntroduceClass(builder.Target.GlobalNamespace, "MetalamaIntroducedClass");
+        builder.With( builder.Target.GlobalNamespace ).IntroduceClass("MetalamaIntroducedClass");
     }
 }
