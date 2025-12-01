@@ -84,13 +84,17 @@ jobs:
 
     # Install .NET SDK via apt package manager (Ubuntu only)
     # Note: We install before cache check because we need the version for the cache key
+    # The backports PPA uses package names like "dotnet8", "dotnet9", "dotnet10"
+    # See: https://launchpad.net/~dotnet/+archive/ubuntu/backports
     - name: Install .NET SDK via apt
       id: setup-dotnet-apt
       if: matrix.sdk-source == 'apt'
       run: |
-        sudo add-apt-repository ppa:dotnet/backports -y || true
+        sudo add-apt-repository ppa:dotnet/backports -y
         sudo apt-get update
-        sudo apt-get install -y dotnet-sdk-${{ matrix.dotnet-version }}
+        # Backports PPA uses "dotnetX" naming (e.g., dotnet8, dotnet9, dotnet10)
+        DOTNET_MAJOR=$(echo "${{ matrix.dotnet-version }}" | cut -d. -f1)
+        sudo apt-get install -y dotnet${DOTNET_MAJOR}
         EXACT_VERSION=$(dotnet --version)
         echo "dotnet-version=$EXACT_VERSION" >> $GITHUB_OUTPUT
         echo "Installed .NET SDK version: $EXACT_VERSION"
