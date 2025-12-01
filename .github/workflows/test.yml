@@ -11,7 +11,7 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
+        os: [ubuntu-latest, ubuntu-22.04, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
         dotnet-version: ['8.0', '9.0', '10.0' ]
         project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         sdk-source: [setup-dotnet, apt]
@@ -20,11 +20,15 @@ jobs:
           - project-type: winforms # N/A
             os: ubuntu-latest
           - project-type: winforms # N/A
+            os: ubuntu-22.04
+          - project-type: winforms # N/A
             os: ubuntu-24.04-arm
           - project-type: winforms # N/A
             os: macos-15
           - project-type: wpf # N/A
             os: ubuntu-latest
+          - project-type: wpf # N/A
+            os: ubuntu-22.04
           - project-type: wpf # N/A
             os: ubuntu-24.04-arm
           - project-type: wpf # N/A
@@ -47,6 +51,19 @@ jobs:
             os: windows-11-arm
           - sdk-source: apt
             os: macos-15
+
+          # ubuntu-22.04 is only used for .NET 10.0 apt (dotnet10 package not available for 24.04)
+          - os: ubuntu-22.04
+            sdk-source: setup-dotnet
+          - os: ubuntu-22.04
+            dotnet-version: '8.0'
+          - os: ubuntu-22.04
+            dotnet-version: '9.0'
+
+          # .NET 10.0 apt not available on ubuntu-latest (24.04) - use ubuntu-22.04 instead
+          - os: ubuntu-latest
+            dotnet-version: '10.0'
+            sdk-source: apt
           
       fail-fast: false # Don't stop other jobs if one fails.
       max-parallel: 8 # Give a chance to stop early when we run manually.
@@ -60,7 +77,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       IS_POSTSHARP_OWNED: true
       TEAMCITY_CLOUD_TOKEN: ${{ secrets.TEAMCITY_CLOUD_TOKEN }}
-      ConsoleAnsi: ${{ (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15') && 'No' || 'Detect' }} # https://github.com/orgs/community/discussions/136868
+      ConsoleAnsi: ${{ (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15') && 'No' || 'Detect' }} # https://github.com/orgs/community/discussions/136868
       MetalamaAssemblyLocatorHooksDirectory: '../..'
       CacheKeyPrefix: '100' # Increase this value to invalidate the cache.
 
