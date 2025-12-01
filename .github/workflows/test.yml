@@ -84,7 +84,8 @@ jobs:
 
     # Install .NET SDK via apt package manager (Ubuntu only)
     # Note: We install before cache check because we need the version for the cache key
-    - name: Add .NET backports repository
+    - name: Install .NET SDK via apt
+      id: setup-dotnet-apt
       if: matrix.sdk-source == 'apt'
       run: |
         sudo add-apt-repository ppa:dotnet/backports -y || true
