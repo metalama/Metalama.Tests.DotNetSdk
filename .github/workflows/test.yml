@@ -14,6 +14,7 @@ jobs:
         os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
         dotnet-version: ['8.0', '9.0', '10.0' ]
         project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
+        sdk-source: [setup-dotnet, apt]
         exclude:
           # WinForms and WPF are only available on Windows
           - project-type: winforms # N/A
@@ -38,6 +39,14 @@ jobs:
             os:  windows-11-arm
           - project-type: maui-blazor
             os:  windows-11-arm
+
+          # apt SDK source only for Ubuntu
+          - sdk-source: apt
+            os: windows-latest
+          - sdk-source: apt
+            os: windows-11-arm
+          - sdk-source: apt
+            os: macos-15
           
       fail-fast: false # Don't stop other jobs if one fails.
       max-parallel: 8 # Give a chance to stop early when we run manually.
@@ -64,6 +73,7 @@ jobs:
     # always resolve to the latest version, e.g. when the "full version" has suffix, like in `10.0.100-rc.1.25451.107`.
     - name: Get exact .NET SDK version
       id: get-exact-version
+      if: matrix.sdk-source != 'apt'
       shell: pwsh
       run: |
         $exactVersion = .\GetLatestVersion.ps1 -VersionPrefix "${{ matrix.dotnet-version }}"
@@ -72,8 +82,36 @@ jobs:
         # Update job name to include exact version for summary parsing
         echo "JOB_EXACT_VERSION=$exactVersion" >> $env:GITHUB_ENV
 
-    - name: "Exact Version: ${{ steps.get-exact-version.outputs.exact-version }}"
-      run: echo "Using exact .NET version ${{ steps.get-exact-version.outputs.exact-version }}"
+    # Install .NET SDK via apt package manager (Ubuntu only)
+    # Note: We install before cache check because we need the version for the cache key
+    - name: Add .NET backports repository
+      if: matrix.sdk-source == 'apt'
+      run: |
+        sudo add-apt-repository ppa:dotnet/backports -y || true
+        sudo apt-get update
+        sudo apt-get install -y dotnet-sdk-${{ matrix.dotnet-version }}
+        EXACT_VERSION=$(dotnet --version)
+        echo "dotnet-version=$EXACT_VERSION" >> $GITHUB_OUTPUT
+        echo "Installed .NET SDK version: $EXACT_VERSION"
+        dotnet --info
+        echo "DOTNET_ROOT=/usr/share/dotnet" >> $GITHUB_ENV
+        echo "DOTNET_MULTILEVEL_LOOKUP=0" >> $GITHUB_ENV
+
+    # Get unified SDK version from either source
+    - name: Get installed SDK version
+      id: sdk-version
+      shell: bash
+      run: |
+        if [ "${{ matrix.sdk-source }}" == "apt" ]; then
+          VERSION="${{ steps.setup-dotnet-apt.outputs.dotnet-version }}"
+        else
+          VERSION="${{ steps.get-exact-version.outputs.exact-version }}"
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Using SDK version: $VERSION"
+
+    - name: "Exact Version: ${{ steps.sdk-version.outputs.version }}${{ matrix.sdk-source == 'apt' && ' (apt)' || '' }}"
+      run: echo "Using .NET version ${{ steps.sdk-version.outputs.version }}"
 
     - name: Restore build cache
       id: cache-build
@@ -81,12 +119,12 @@ jobs:
       with:
         path: |
           ./.build-cache
-        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ steps.get-exact-version.outputs.exact-version }}-${{ matrix.project-type }}
+        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ matrix.sdk-source }}-${{ steps.sdk-version.outputs.version }}-${{ matrix.project-type }}
 
-    # global.json must be present for setup-dotnet to work.        
+    # global.json must be present for setup-dotnet to work.
     - name: Create temporary global.json
       id: create-temp-global-json
-      if: steps.cache-build.outputs.cache-hit != 'true'
+      if: matrix.sdk-source != 'apt' && steps.cache-build.outputs.cache-hit != 'true'
       shell: pwsh
       run: |
         $globalJson = @{
@@ -99,7 +137,7 @@ jobs:
     - name: Install .NET For The Test
       uses: actions/setup-dotnet@v5
       id: setup-dotnet
-      if: steps.cache-build.outputs.cache-hit != 'true'
+      if: matrix.sdk-source != 'apt' && steps.cache-build.outputs.cache-hit != 'true'
       with:
         dotnet-version: ${{ steps.get-exact-version.outputs.exact-version }}
 
@@ -120,7 +158,7 @@ jobs:
       shell: pwsh
       if: steps.cache-build.outputs.cache-hit != 'true'
       run: |
-        $version = "${{ steps.get-exact-version.outputs.exact-version }}"
+        $version = "${{ steps.sdk-version.outputs.version }}"
         $cleanedVersion = $version -replace '-servicing.*', ''
         echo "DOTNET_CLEANED_VERSION=$cleanedVersion" >> $env:GITHUB_ENV
         echo "Cleaned version: $cleanedVersion"
@@ -195,7 +233,7 @@ jobs:
     - name: Set ref version for Assembly Locator
       shell: pwsh
       if:  steps.cache-build.outputs.cache-hit != 'true'
-      run: ./Build.ps1 set-ref-version ${{ steps.setup-dotnet.outputs.dotnet-version }} --nologo
+      run: ./Build.ps1 set-ref-version ${{ steps.sdk-version.outputs.version }} --nologo
 
     - name: Create project
       shell: pwsh
@@ -223,7 +261,7 @@ jobs:
       uses: actions/cache/save@v4
       with:
         path: ./.build-cache
-        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ matrix.project-type }}
+        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ matrix.sdk-source }}-${{ steps.sdk-version.outputs.version }}-${{ matrix.project-type }}
 
   # Generate test summary after all tests complete
   generate-summary:
@@ -266,30 +304,38 @@ jobs:
           });
           
           // Parse matrix jobs (skip the summary job itself)
+          // Job name format: build (os, dotnet-version, sdk-source, project-type)
           const results = jobsData.jobs
             .filter(job => job.name.startsWith('build ('))
             .map(job => {
-              const match = job.name.match(/build \(([^,]+), ([^,]+), ([^)]+)\)/);
+              const match = job.name.match(/build \(([^,]+), ([^,]+), ([^,]+), ([^)]+)\)/);
               if (match) {
                 // Extract exact version from job steps
                 let exactVersion = match[2]; // Default to matrix version
                 if (job.steps) {
-                  const versionStep = job.steps.find(step => 
+                  const versionStep = job.steps.find(step =>
                     step.name && step.name.startsWith('Exact Version: ')
                   );
                   if (versionStep) {
-                    const versionMatch = versionStep.name.match(/^Exact Version: (.+)$/);
+                    // Handle both "Exact Version: X.Y.Z" and "Exact Version: X.Y.Z (apt)"
+                    const versionMatch = versionStep.name.match(/^Exact Version: ([^\s(]+)/);
                     if (versionMatch) {
                       exactVersion = versionMatch[1];
                     }
                   }
                 }
-                
+
+                const sdkSource = match[3];
+                // Create composite OS identifier that includes sdk-source for apt
+                const osDisplay = sdkSource === 'apt' ? `${match[1]} (apt)` : match[1];
+
                 return {
                   os: match[1],
-                  dotnetVersion: match[2], 
+                  osDisplay: osDisplay,
+                  dotnetVersion: match[2],
+                  sdkSource: sdkSource,
                   exactVersion: exactVersion,
-                  projectType: match[3],
+                  projectType: match[4],
                   status: job.conclusion,
                   url: job.html_url
                 };
@@ -308,7 +354,7 @@ jobs:
           // Group results by .NET version and collect exact versions
           const versionGroups = {};
           const exactVersions = {};
-          
+
           results.forEach(result => {
             if (!versionGroups[result.dotnetVersion]) {
               versionGroups[result.dotnetVersion] = {};
@@ -316,15 +362,23 @@ jobs:
             if (!versionGroups[result.dotnetVersion][result.projectType]) {
               versionGroups[result.dotnetVersion][result.projectType] = {};
             }
-            versionGroups[result.dotnetVersion][result.projectType][result.os] = result;
-            
+            // Use osDisplay as key to differentiate setup-dotnet vs apt
+            versionGroups[result.dotnetVersion][result.projectType][result.osDisplay] = result;
+
             if (!exactVersions[result.dotnetVersion] && result.exactVersion) {
               exactVersions[result.dotnetVersion] = result.exactVersion;
             }
           });
-          
-          // Get all unique operating systems and project types
-          const allOS = [...new Set(results.map(r => r.os))].sort();
+
+          // Get all unique operating systems (with sdk-source annotation) and project types
+          // Sort with custom logic: base OS first, then apt variant
+          const allOS = [...new Set(results.map(r => r.osDisplay))].sort((a, b) => {
+            const aBase = a.replace(' (apt)', '');
+            const bBase = b.replace(' (apt)', '');
+            if (aBase !== bBase) return aBase.localeCompare(bBase);
+            // Same base OS: non-apt comes before apt
+            return a.includes('(apt)') ? 1 : -1;
+          });
           const allProjectTypes = [...new Set(results.map(r => r.projectType))].sort();
           
           // Generate markdown summary
