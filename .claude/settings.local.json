@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(gh run view:*)",
+      "WebFetch(domain:documentation.ubuntu.com)",
+      "WebFetch(domain:launchpad.net)",
+      "Bash(gh run list:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
