@@ -182,17 +182,6 @@ jobs:
       with:
         dotnet-version: 9.0.3xx # Keep in sync with eng\src\global.json.
 
-    # Ensure apt-installed SDK takes precedence over setup-dotnet for builds
-    - name: Restore apt SDK PATH priority
-      if: matrix.sdk-source == 'apt' && steps.cache-build.outputs.cache-hit != 'true'
-      run: |
-        # Prepend apt dotnet location (saved during install) to PATH
-        echo "${{ env.APT_DOTNET_DIR }}" >> $GITHUB_PATH
-        echo "Restored apt SDK priority from: ${{ env.APT_DOTNET_DIR }}"
-        echo "Verifying dotnet location and version:"
-        "${{ env.APT_DOTNET_DIR }}/dotnet" --version
-        "${{ env.APT_DOTNET_DIR }}/dotnet" --list-sdks
-
     - name: Clean up .NET version
       shell: pwsh
       if: steps.cache-build.outputs.cache-hit != 'true'
