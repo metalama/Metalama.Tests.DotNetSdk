@@ -11,10 +11,11 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu-24.04, ubuntu-22.04, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
+        # TEMP: Testing only ubuntu-24.04-arm apt
+        os: [ubuntu-24.04-arm] # [ubuntu-24.04, ubuntu-22.04, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
         dotnet-version: ['8.0', '9.0', '10.0' ]
-        project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
-        sdk-source: [setup-dotnet, apt]
+        project-type: ['console'] # ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
+        sdk-source: [apt] # [setup-dotnet, apt]
         exclude:
           # WinForms and WPF are only available on Windows
           - project-type: winforms # N/A
@@ -115,9 +116,11 @@ jobs:
         # Backports PPA uses "dotnetX" naming (e.g., dotnet8, dotnet9, dotnet10)
         DOTNET_MAJOR=$(echo "${{ matrix.dotnet-version }}" | cut -d. -f1)
         sudo apt-get install -y dotnet${DOTNET_MAJOR}
-        EXACT_VERSION=$(dotnet --version)
+        # Get actual installed version from --list-sdks (dotnet --version can be wrong due to apt bug)
+        # Take the latest version matching DOTNET_MAJOR
+        EXACT_VERSION=$(dotnet --list-sdks | grep "^${DOTNET_MAJOR}\." | cut -d' ' -f1 | sort -V | tail -1)
         echo "dotnet-version=$EXACT_VERSION" >> $GITHUB_OUTPUT
-        echo "Installed .NET SDK version: $EXACT_VERSION"
+        echo "Installed .NET SDK version: $EXACT_VERSION (from --list-sdks)"
         dotnet --info
         # Store apt dotnet location for reference
         APT_DOTNET_DIR=$(dirname $(readlink -f $(which dotnet)))
