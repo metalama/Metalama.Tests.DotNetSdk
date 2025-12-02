@@ -119,11 +119,9 @@ jobs:
         echo "dotnet-version=$EXACT_VERSION" >> $GITHUB_OUTPUT
         echo "Installed .NET SDK version: $EXACT_VERSION"
         dotnet --info
-        # Store apt dotnet location for later PATH restoration
+        # Store apt dotnet location for reference
         APT_DOTNET_DIR=$(dirname $(readlink -f $(which dotnet)))
         echo "APT_DOTNET_DIR=$APT_DOTNET_DIR" >> $GITHUB_ENV
-        echo "DOTNET_ROOT=$APT_DOTNET_DIR" >> $GITHUB_ENV
-        echo "DOTNET_MULTILEVEL_LOOKUP=0" >> $GITHUB_ENV
 
     # Get unified SDK version from either source
     - name: Get installed SDK version
