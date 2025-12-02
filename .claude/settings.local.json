@@ -5,7 +5,13 @@
       "Bash(gh run view:*)",
       "WebFetch(domain:documentation.ubuntu.com)",
       "WebFetch(domain:launchpad.net)",
-      "Bash(gh run list:*)"
+      "Bash(gh run list:*)",
+      "Bash(xargs:*)",
+      "Bash(git show:*)",
+      "Bash(findstr:*)",
+      "Bash(gh api:*)",
+      "Bash(gh cache list:*)",
+      "Bash(gh cache delete:*)"
     ],
     "deny": [],
     "ask": []
