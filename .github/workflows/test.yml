@@ -11,14 +11,14 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-22.04, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
+        os: [ubuntu-24.04, ubuntu-22.04, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
         dotnet-version: ['8.0', '9.0', '10.0' ]
         project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
         sdk-source: [setup-dotnet, apt]
         exclude:
           # WinForms and WPF are only available on Windows
           - project-type: winforms # N/A
-            os: ubuntu-latest
+            os: ubuntu-24.04
           - project-type: winforms # N/A
             os: ubuntu-22.04
           - project-type: winforms # N/A
@@ -26,7 +26,7 @@ jobs:
           - project-type: winforms # N/A
             os: macos-15
           - project-type: wpf # N/A
-            os: ubuntu-latest
+            os: ubuntu-24.04
           - project-type: wpf # N/A
             os: ubuntu-22.04
           - project-type: wpf # N/A
@@ -61,7 +61,7 @@ jobs:
             dotnet-version: '9.0'
 
           # .NET 10.0 apt not available on ubuntu 24.04 - use ubuntu-22.04 instead
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             dotnet-version: '10.0'
             sdk-source: apt
           - os: ubuntu-24.04-arm
@@ -80,7 +80,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       IS_POSTSHARP_OWNED: true
       TEAMCITY_CLOUD_TOKEN: ${{ secrets.TEAMCITY_CLOUD_TOKEN }}
-      ConsoleAnsi: ${{ (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15') && 'No' || 'Detect' }} # https://github.com/orgs/community/discussions/136868
+      ConsoleAnsi: ${{ (matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15') && 'No' || 'Detect' }} # https://github.com/orgs/community/discussions/136868
       MetalamaAssemblyLocatorHooksDirectory: '../..'
       CacheKeyPrefix: '100' # Increase this value to invalidate the cache.
 
@@ -215,7 +215,7 @@ jobs:
         java-version: 17
 
     - name: Install Android SDK
-      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15' || matrix.os == 'windows-11-arm') && steps.cache-build.outputs.cache-hit != 'true'
+      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && (matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15' || matrix.os == 'windows-11-arm') && steps.cache-build.outputs.cache-hit != 'true'
       uses: android-actions/setup-android@v3
       with:
           cmdline-tools-version: 10406996
@@ -304,7 +304,7 @@ jobs:
 
   # Generate test summary after all tests complete
   generate-summary:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build  # Wait for all matrix jobs to complete
     if: always()  # Run even if some tests failed
     
@@ -334,17 +334,26 @@ jobs:
             run_id: context.runId
           });
           
-          // Get all jobs for this workflow run
-          const { data: jobsData } = await github.rest.actions.listJobsForWorkflowRun({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            run_id: context.runId,
-            per_page: 100
-          });
+          // Get all jobs for this workflow run (paginated - API max is 100 per page)
+          let allJobs = [];
+          let page = 1;
+          while (true) {
+            const { data: jobsData } = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+              per_page: 100,
+              page: page
+            });
+            allJobs = allJobs.concat(jobsData.jobs);
+            if (jobsData.jobs.length < 100) break;
+            page++;
+          }
+          console.log(`Fetched ${allJobs.length} jobs across ${page} page(s)`);
           
           // Parse matrix jobs (skip the summary job itself)
           // Job name format: build (os, dotnet-version, sdk-source, project-type)
-          const results = jobsData.jobs
+          const results = allJobs
             .filter(job => job.name.startsWith('build ('))
             .map(job => {
               const match = job.name.match(/build \(([^,]+), ([^,]+), ([^,]+), ([^)]+)\)/);
