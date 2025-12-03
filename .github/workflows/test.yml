@@ -116,13 +116,11 @@ jobs:
         # Backports PPA uses "dotnetX" naming (e.g., dotnet8, dotnet9, dotnet10)
         DOTNET_MAJOR=$(echo "${{ matrix.dotnet-version }}" | cut -d. -f1)
         sudo apt-get install -y dotnet${DOTNET_MAJOR}
-        # Get actual installed version from SDK directory (dotnet --list-sdks can lie due to apt bug)
-        # Look at actual SDK directories in /usr/lib/dotnet/sdk/
-        APT_SDK_DIR="/usr/lib/dotnet/sdk"
-        EXACT_VERSION=$(ls -1 "$APT_SDK_DIR" | grep "^${DOTNET_MAJOR}\." | sort -V | tail -1)
+        # Get actual installed version from --list-sdks (dotnet --version can be wrong due to apt bug)
+        # Take the latest version matching DOTNET_MAJOR
+        EXACT_VERSION=$(dotnet --list-sdks | grep "^${DOTNET_MAJOR}\." | cut -d' ' -f1 | sort -V | tail -1)
         echo "dotnet-version=$EXACT_VERSION" >> $GITHUB_OUTPUT
-        echo "Installed .NET SDK version: $EXACT_VERSION (from $APT_SDK_DIR directory)"
-        echo "dotnet --list-sdks reports: $(dotnet --list-sdks | grep "^${DOTNET_MAJOR}\.")"
+        echo "Installed .NET SDK version: $EXACT_VERSION (from --list-sdks)"
         dotnet --info
         # Store apt dotnet location for reference
         APT_DOTNET_DIR=$(dirname $(readlink -f $(which dotnet)))
