@@ -11,7 +11,14 @@
       "Bash(findstr:*)",
       "Bash(gh api:*)",
       "Bash(gh cache list:*)",
-      "Bash(gh cache delete:*)"
+      "Bash(gh cache delete:*)",
+      "Bash(gh run cancel:*)",
+      "Bash(git add:*)",
+      "Bash(gh workflow run:*)",
+      "Bash(echo:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [],
     "ask": []
