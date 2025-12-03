@@ -346,7 +346,8 @@ jobs:
           console.log(`Fetched ${allJobs.length} jobs across ${page} page(s)`);
           
           // Parse matrix jobs (skip the summary job itself)
-          // Job name format: build (os, dotnet-version, sdk-source, project-type)
+          // Job name format: build (os, dotnet-version, project-type, sdk-source)
+          // Note: Order matches matrix definition order in YAML
           const results = allJobs
             .filter(job => job.name.startsWith('build ('))
             .map(job => {
@@ -367,7 +368,8 @@ jobs:
                   }
                 }
 
-                const sdkSource = match[3];
+                const projectType = match[3];
+                const sdkSource = match[4];
                 // Create composite OS identifier that includes sdk-source for apt
                 const osDisplay = sdkSource === 'apt' ? `${match[1]} (apt)` : match[1];
 
@@ -375,9 +377,9 @@ jobs:
                   os: match[1],
                   osDisplay: osDisplay,
                   dotnetVersion: match[2],
+                  projectType: projectType,
                   sdkSource: sdkSource,
                   exactVersion: exactVersion,
-                  projectType: match[4],
                   status: job.conclusion,
                   url: job.html_url
                 };
