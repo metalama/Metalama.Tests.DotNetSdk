@@ -395,7 +395,7 @@ jobs:
           const failedJobs = results.filter(r => r.status === 'failure').length;
           const cancelledJobs = results.filter(r => r.status === 'cancelled').length;
           
-          // Group results by .NET version and collect exact versions
+          // Group results by .NET version -> sdk-source -> project-type -> os
           const versionGroups = {};
           const exactVersions = {};
 
@@ -403,27 +403,24 @@ jobs:
             if (!versionGroups[result.dotnetVersion]) {
               versionGroups[result.dotnetVersion] = {};
             }
-            if (!versionGroups[result.dotnetVersion][result.projectType]) {
-              versionGroups[result.dotnetVersion][result.projectType] = {};
+            if (!versionGroups[result.dotnetVersion][result.sdkSource]) {
+              versionGroups[result.dotnetVersion][result.sdkSource] = {};
             }
-            // Use osDisplay as key to differentiate setup-dotnet vs apt
-            versionGroups[result.dotnetVersion][result.projectType][result.osDisplay] = result;
+            if (!versionGroups[result.dotnetVersion][result.sdkSource][result.projectType]) {
+              versionGroups[result.dotnetVersion][result.sdkSource][result.projectType] = {};
+            }
+            versionGroups[result.dotnetVersion][result.sdkSource][result.projectType][result.os] = result;
 
-            if (!exactVersions[result.dotnetVersion] && result.exactVersion) {
-              exactVersions[result.dotnetVersion] = result.exactVersion;
+            // Track exact versions per dotnet version and sdk-source
+            const exactKey = `${result.dotnetVersion}-${result.sdkSource}`;
+            if (!exactVersions[exactKey] && result.exactVersion) {
+              exactVersions[exactKey] = result.exactVersion;
             }
           });
 
-          // Get all unique operating systems (with sdk-source annotation) and project types
-          // Sort with custom logic: base OS first, then apt variant
-          const allOS = [...new Set(results.map(r => r.osDisplay))].sort((a, b) => {
-            const aBase = a.replace(' (apt)', '');
-            const bBase = b.replace(' (apt)', '');
-            if (aBase !== bBase) return aBase.localeCompare(bBase);
-            // Same base OS: non-apt comes before apt
-            return a.includes('(apt)') ? 1 : -1;
-          });
+          // Get unique values for rendering
           const allProjectTypes = [...new Set(results.map(r => r.projectType))].sort();
+          const sdkSources = ['setup-dotnet', 'apt']; // Fixed order
           
           // Generate markdown summary
           let markdown = `# 🧪 Platform Integration Tests Summary - ${branch}\n\n`;
@@ -434,7 +431,7 @@ jobs:
             const parseVersion = (version) => version.split('.').map(part => parseInt(part, 10) || 0);
             const versionA = parseVersion(a);
             const versionB = parseVersion(b);
-            
+
             for (let i = 0; i < Math.max(versionA.length, versionB.length); i++) {
               const partA = versionA[i] || 0;
               const partB = versionB[i] || 0;
@@ -442,38 +439,58 @@ jobs:
             }
             return 0;
           }).forEach(dotnetVersion => {
-            const exactVer = exactVersions[dotnetVersion];
-            const versionDisplay = exactVer && exactVer !== dotnetVersion 
-              ? `${dotnetVersion} (${exactVer})` 
-              : dotnetVersion;
-            markdown += `## .NET ${versionDisplay}\n\n`;
-            
-            // Table header
-            markdown += `| Project Type | ${allOS.join(' | ')} |\n`;
-            markdown += `|---|${allOS.map(() => '---').join('|')}|\n`;
-            
-            // Table rows
-            allProjectTypes.forEach(projectType => {
-              markdown += `| ${projectType} |`;
-              
-              allOS.forEach(os => {
-                const result = versionGroups[dotnetVersion][projectType] && versionGroups[dotnetVersion][projectType][os];
-                
-                if (result) {
-                  const statusIcon = result.status === 'success' ? '✅' : 
-                                   result.status === 'failure' ? '❌' : 
-                                   result.status === 'cancelled' ? '⚠️' : 
-                                   result.status === 'skipped' ? '🚫' : '❓';
-                  markdown += ` [${statusIcon}](${result.url}) |`;
-                } else {
-                  markdown += ` 🚫 |`;
-                }
+            markdown += `## .NET ${dotnetVersion}\n\n`;
+
+            // Create a table for each sdk-source
+            sdkSources.forEach(sdkSource => {
+              const sdkData = versionGroups[dotnetVersion][sdkSource];
+              if (!sdkData) return; // Skip if no data for this sdk-source
+
+              // Get OS list for this sdk-source (only OS that have results)
+              const osForSdkSource = [...new Set(
+                Object.values(sdkData).flatMap(projectData => Object.keys(projectData))
+              )].sort();
+
+              if (osForSdkSource.length === 0) return;
+
+              // Get exact version for this combination
+              const exactKey = `${dotnetVersion}-${sdkSource}`;
+              const exactVer = exactVersions[exactKey];
+              const versionDisplay = exactVer ? ` (${exactVer})` : '';
+
+              markdown += `### ${sdkSource}${versionDisplay}\n\n`;
+
+              // Table header
+              markdown += `| Project Type | ${osForSdkSource.join(' | ')} |\n`;
+              markdown += `|---|${osForSdkSource.map(() => '---').join('|')}|\n`;
+
+              // Table rows
+              allProjectTypes.forEach(projectType => {
+                // Check if this project type has any results for this sdk-source
+                const projectData = sdkData[projectType];
+                if (!projectData) return; // Skip project types with no results
+
+                markdown += `| ${projectType} |`;
+
+                osForSdkSource.forEach(os => {
+                  const result = projectData[os];
+
+                  if (result) {
+                    const statusIcon = result.status === 'success' ? '✅' :
+                                     result.status === 'failure' ? '❌' :
+                                     result.status === 'cancelled' ? '⚠️' :
+                                     result.status === 'skipped' ? '🚫' : '❓';
+                    markdown += ` [${statusIcon}](${result.url}) |`;
+                  } else {
+                    markdown += ` 🚫 |`;
+                  }
+                });
+
+                markdown += `\n`;
               });
-              
+
               markdown += `\n`;
             });
-            
-            markdown += `\n`;
           });
           
           // Create the issue body
