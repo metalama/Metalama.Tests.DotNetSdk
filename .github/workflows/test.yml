@@ -119,8 +119,13 @@ jobs:
         # Get actual installed version from --list-sdks (dotnet --version can be wrong due to apt bug)
         # Take the latest version matching DOTNET_MAJOR
         EXACT_VERSION=$(dotnet --list-sdks | grep "^${DOTNET_MAJOR}\." | cut -d' ' -f1 | sort -V | tail -1)
+        # Workaround: apt on ubuntu-24.04-arm reports 9.0.112 but actual SDK is 9.0.111
+        if [ "$EXACT_VERSION" == "9.0.112" ] && [ "${{ matrix.os }}" == "ubuntu-24.04-arm" ]; then
+          echo "Applying workaround: 9.0.112 -> 9.0.111 (apt bug on ubuntu-24.04-arm)"
+          EXACT_VERSION="9.0.111"
+        fi
         echo "dotnet-version=$EXACT_VERSION" >> $GITHUB_OUTPUT
-        echo "Installed .NET SDK version: $EXACT_VERSION (from --list-sdks)"
+        echo "Installed .NET SDK version: $EXACT_VERSION"
         dotnet --info
         # Store apt dotnet location for reference
         APT_DOTNET_DIR=$(dirname $(readlink -f $(which dotnet)))
