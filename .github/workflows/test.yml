@@ -118,9 +118,9 @@ jobs:
         # Get actual installed version from --list-sdks (dotnet --version can be wrong due to apt bug)
         # Take the latest version matching DOTNET_MAJOR
         EXACT_VERSION=$(dotnet --list-sdks | grep "^${DOTNET_MAJOR}\." | cut -d' ' -f1 | sort -V | tail -1)
-        # Workaround: apt on ubuntu-24.04* may report incorrect patch version (e.g., 9.0.113 when actual is 9.0.112)
-        # Apply N -> N-1 patch version downgrade for ubuntu-24.04 and ubuntu-24.04-arm
-        if [[ "${{ matrix.os }}" == ubuntu-24.04* ]]; then
+        # Workaround: apt on Ubuntu may report incorrect patch version (e.g., 9.0.113 when actual is 9.0.112)
+        # Apply N -> N-1 patch version downgrade for all Ubuntu variants
+        if [[ "${{ matrix.os }}" == ubuntu-* ]]; then
           # Extract major.minor.patch components
           MAJOR_MINOR=$(echo "$EXACT_VERSION" | cut -d. -f1-2)
           PATCH=$(echo "$EXACT_VERSION" | cut -d. -f3)
