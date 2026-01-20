@@ -124,6 +124,7 @@ jobs:
           # Extract major.minor.patch components
           MAJOR_MINOR=$(echo "$EXACT_VERSION" | cut -d. -f1-2)
           PATCH=$(echo "$EXACT_VERSION" | cut -d. -f3)
+          echo "Detected version components: MAJOR_MINOR=$MAJOR_MINOR, PATCH=$PATCH"
           # Check if PATCH is a number and >= 1
           if [[ "$PATCH" =~ ^[0-9]+$ ]] && [ "$PATCH" -ge 1 ]; then
             NEW_PATCH=$((PATCH - 1))
