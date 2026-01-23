@@ -82,7 +82,7 @@ jobs:
       TEAMCITY_CLOUD_TOKEN: ${{ secrets.TEAMCITY_CLOUD_TOKEN }}
       ConsoleAnsi: ${{ (matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15') && 'No' || 'Detect' }} # https://github.com/orgs/community/discussions/136868
       MetalamaAssemblyLocatorHooksDirectory: '../..'
-      CacheKeyPrefix: '100' # Increase this value to invalidate the cache.
+      CacheKeyPrefix: '101' # Increase this value to invalidate the cache.
 
     steps:
 
