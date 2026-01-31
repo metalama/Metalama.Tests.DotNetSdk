@@ -49,3 +49,4 @@ launchSettings.json
 **/.idea/copilot.data.*
 nuget.config
 global.json
+eng/docker-context/.g/
