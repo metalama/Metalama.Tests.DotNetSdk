@@ -10,7 +10,6 @@ on:
         type: choice
         options:
           - all
-          - ubuntu-24.04
           - ubuntu-22.04
           - ubuntu-24.04-arm
           - windows-latest
