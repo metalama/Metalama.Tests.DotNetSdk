@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(gh run view:*)",
+      "WebFetch(domain:documentation.ubuntu.com)",
+      "WebFetch(domain:launchpad.net)",
+      "Bash(gh run list:*)",
+      "Bash(xargs:*)",
+      "Bash(git show:*)",
+      "Bash(findstr:*)",
+      "Bash(gh api:*)",
+      "Bash(gh cache list:*)",
+      "Bash(gh cache delete:*)",
+      "Bash(gh run cancel:*)",
+      "Bash(git add:*)",
+      "Bash(gh workflow run:*)",
+      "Bash(echo:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "WebFetch(domain:github.com)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,0 +1,120 @@
+# Claude Code Session Learnings
+
+## Repository Structure
+
+- `.github/workflows/test.yml` - Main CI workflow for platform integration tests
+- `Build.ps1` - PowerShell build script (generated from PostSharp.Engineering template)
+- `eng/src/global.json` - Engineering SDK version configuration
+- `eng/Versions.props` - Engineering package versions
+- `GetLatestVersion.ps1` - Script to resolve exact .NET SDK versions
+
+## Commit Guidelines
+
+- Use short, descriptive commit messages
+- Do NOT include Claude Code signature unless requested
+- Example workflow:
+```bash
+git add <files>
+git commit -m "Short descriptive message."
+git push
+```
+
+## Continuous Status Monitoring
+
+To check workflow status every 60 seconds until failure or completion:
+```bash
+# In a loop with sleep
+sleep 60 && gh run view <run_id> --json status,conclusion,jobs --jq "{...}"
+```
+
+Or ask Claude to "check status every 60 seconds, stop on first failure, cancel build, analyze cause"
+
+## Workflow Management
+
+### Check workflow status
+```bash
+gh run view <run_id> --json status,conclusion,jobs --jq "{status: .status, conclusion: .conclusion, failed: [.jobs[] | select(.conclusion == \"failure\") | .name], completed: [.jobs[] | select(.status == \"completed\") | .name] | length, total: .jobs | length}"
+```
+
+### Trigger workflow
+```bash
+gh workflow run test.yml --ref develop/2026.0
+```
+
+### Cancel workflow
+```bash
+gh run cancel <run_id>
+```
+
+### Get job logs for analysis
+```bash
+# Get job ID
+gh api repos/metalama/Metalama.Tests.DotNetSdk/actions/runs/<run_id>/jobs?per_page=100 --jq ".jobs[] | select(.name | contains(\"<job_name_fragment>\")) | .id"
+
+# Get logs and search for errors
+gh api repos/metalama/Metalama.Tests.DotNetSdk/actions/jobs/<job_id>/logs 2>&1 | grep -i "error\|fail"
+```
+
+## Cache Management
+
+### List caches
+```bash
+gh cache list --limit 200 | grep ubuntu
+```
+
+### Delete specific cache by key
+```bash
+gh cache delete "build-100-ubuntu-24.04-apt-9.0.112-console"
+```
+
+## Common Issues and Solutions
+
+### 1. Path separator issue on Linux
+**Symptom**: Build.ps1 fails with path like `\eng\src\` on Linux
+**Cause**: Windows-style backslashes in PowerShell script
+**Fix**: Use `Join-Path` instead of string concatenation with backslashes
+```powershell
+# Bad
+Set-Location $PSScriptRoot\$EngPath\src
+
+# Good
+Set-Location (Join-Path $PSScriptRoot $EngPath "src")
+```
+
+### 2. SDK version mismatch with apt
+**Symptom**: Wrong SDK version used after apt installation
+**Cause**: setup-dotnet overrides PATH priority
+**Analysis**: Check which dotnet is being used and from where
+**Fix**: Carefully manage PATH and DOTNET_ROOT environment variables
+
+### 3. Engineering SDK requirement conflicts
+**Symptom**: `NETSDK1045: The current .NET SDK does not support targeting .NET 9.0`
+**Cause**: apt SDK (e.g., 8.0) taking precedence over engineering SDK (9.0)
+**Fix**: Don't restore apt PATH priority; let engineering SDK handle Build.ps1, use global.json for test project
+
+### 4. SDK resolution failure
+**Symptom**: `sdk-not-found` error with exit code 155
+**Cause**: `DOTNET_MULTILEVEL_LOOKUP=0` prevents finding SDKs from multiple locations
+**Fix**: Remove `DOTNET_MULTILEVEL_LOOKUP=0` to allow multilevel SDK lookup
+
+### 5. Cache causing stale behavior
+**Symptom**: Code changes don't take effect
+**Cause**: Jobs hitting old cache with previous (buggy) build artifacts
+**Fix**: Delete relevant caches or bump CacheKeyPrefix
+
+## Analyzing Workflow Failures
+
+1. **Get the run status** to identify failed jobs
+2. **Get the job ID** for the failed job
+3. **Fetch logs** and search for error messages
+4. **Look for context** around the error (use `-B5` with grep)
+5. **Check environment**: SDK versions, PATH, environment variables
+6. **Compare with working runs** to identify what changed
+
+## apt SDK Testing Notes
+
+- Ubuntu backports PPA uses `dotnetX` naming (e.g., `dotnet8`, `dotnet9`, `dotnet10`)
+- .NET 10.0 apt package only available for Ubuntu 22.04 (Jammy), not 24.04 (Noble)
+- apt installs to `/usr/lib/dotnet`, setup-dotnet installs to `/usr/share/dotnet`
+- GitHub API returns max 100 jobs per page - use pagination for large matrices
+- when testing a new workflow, comment out the old test matrix, and only select the failing configurations. After success, restore the full matrix

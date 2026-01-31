@@ -11,19 +11,24 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
+        os: [ubuntu-24.04, ubuntu-22.04, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
         dotnet-version: ['8.0', '9.0', '10.0' ]
         project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
+        sdk-source: [setup-dotnet, apt]
         exclude:
           # WinForms and WPF are only available on Windows
           - project-type: winforms # N/A
-            os: ubuntu-latest
+            os: ubuntu-24.04
+          - project-type: winforms # N/A
+            os: ubuntu-22.04
           - project-type: winforms # N/A
             os: ubuntu-24.04-arm
           - project-type: winforms # N/A
             os: macos-15
           - project-type: wpf # N/A
-            os: ubuntu-latest
+            os: ubuntu-24.04
+          - project-type: wpf # N/A
+            os: ubuntu-22.04
           - project-type: wpf # N/A
             os: ubuntu-24.04-arm
           - project-type: wpf # N/A
@@ -38,6 +43,30 @@ jobs:
             os:  windows-11-arm
           - project-type: maui-blazor
             os:  windows-11-arm
+
+          # apt SDK source only for Ubuntu
+          - sdk-source: apt
+            os: windows-latest
+          - sdk-source: apt
+            os: windows-11-arm
+          - sdk-source: apt
+            os: macos-15
+
+          # ubuntu-22.04 is only used for .NET 10.0 apt (dotnet10 package not available for 24.04)
+          - os: ubuntu-22.04
+            sdk-source: setup-dotnet
+          - os: ubuntu-22.04
+            dotnet-version: '8.0'
+          - os: ubuntu-22.04
+            dotnet-version: '9.0'
+
+          # .NET 10.0 apt not available on ubuntu 24.04 - use ubuntu-22.04 instead
+          - os: ubuntu-24.04
+            dotnet-version: '10.0'
+            sdk-source: apt
+          - os: ubuntu-24.04-arm
+            dotnet-version: '10.0'
+            sdk-source: apt
           
       fail-fast: false # Don't stop other jobs if one fails.
       max-parallel: 8 # Give a chance to stop early when we run manually.
@@ -51,9 +80,9 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       IS_POSTSHARP_OWNED: true
       TEAMCITY_CLOUD_TOKEN: ${{ secrets.TEAMCITY_CLOUD_TOKEN }}
-      ConsoleAnsi: ${{ (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15') && 'No' || 'Detect' }} # https://github.com/orgs/community/discussions/136868
+      ConsoleAnsi: ${{ (matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15') && 'No' || 'Detect' }} # https://github.com/orgs/community/discussions/136868
       MetalamaAssemblyLocatorHooksDirectory: '../..'
-      CacheKeyPrefix: '100' # Increase this value to invalidate the cache.
+      CacheKeyPrefix: '101' # Increase this value to invalidate the cache.
 
     steps:
 
@@ -64,6 +93,7 @@ jobs:
     # always resolve to the latest version, e.g. when the "full version" has suffix, like in `10.0.100-rc.1.25451.107`.
     - name: Get exact .NET SDK version
       id: get-exact-version
+      if: matrix.sdk-source != 'apt'
       shell: pwsh
       run: |
         $exactVersion = .\GetLatestVersion.ps1 -VersionPrefix "${{ matrix.dotnet-version }}"
@@ -72,8 +102,59 @@ jobs:
         # Update job name to include exact version for summary parsing
         echo "JOB_EXACT_VERSION=$exactVersion" >> $env:GITHUB_ENV
 
-    - name: "Exact Version: ${{ steps.get-exact-version.outputs.exact-version }}"
-      run: echo "Using exact .NET version ${{ steps.get-exact-version.outputs.exact-version }}"
+    # Install .NET SDK via apt package manager (Ubuntu only)
+    # Note: We install before cache check because we need the version for the cache key
+    # The backports PPA uses package names like "dotnet8", "dotnet9", "dotnet10"
+    # See: https://launchpad.net/~dotnet/+archive/ubuntu/backports
+    - name: Install .NET SDK via apt
+      id: setup-dotnet-apt
+      if: matrix.sdk-source == 'apt'
+      run: |
+        sudo add-apt-repository ppa:dotnet/backports -y
+        sudo apt-get update
+        # Backports PPA uses "dotnetX" naming (e.g., dotnet8, dotnet9, dotnet10)
+        DOTNET_MAJOR=$(echo "${{ matrix.dotnet-version }}" | cut -d. -f1)
+        sudo apt-get install -y dotnet${DOTNET_MAJOR}
+        # Get actual installed version from --list-sdks (dotnet --version can be wrong due to apt bug)
+        # Take the latest version matching DOTNET_MAJOR
+        EXACT_VERSION=$(dotnet --list-sdks | grep "^${DOTNET_MAJOR}\." | cut -d' ' -f1 | sort -V | tail -1)
+        # Workaround: apt on Ubuntu may report incorrect patch version (e.g., 9.0.113 when actual is 9.0.112)
+        # Apply N -> N-1 patch version downgrade for all Ubuntu variants
+        if [[ "${{ matrix.os }}" == ubuntu-* ]]; then
+          # Extract major.minor.patch components
+          MAJOR_MINOR=$(echo "$EXACT_VERSION" | cut -d. -f1-2)
+          PATCH=$(echo "$EXACT_VERSION" | cut -d. -f3)
+          echo "Detected version components: MAJOR_MINOR=$MAJOR_MINOR, PATCH=$PATCH"
+          # Check if PATCH is a number and >= 1
+          if [[ "$PATCH" =~ ^[0-9]+$ ]] && [ "$PATCH" -ge 1 ]; then
+            NEW_PATCH=$((PATCH - 1))
+            DOWNGRADED_VERSION="${MAJOR_MINOR}.${NEW_PATCH}"
+            echo "Applying workaround: $EXACT_VERSION -> $DOWNGRADED_VERSION (apt bug on ${{ matrix.os }})"
+            EXACT_VERSION="$DOWNGRADED_VERSION"
+          fi
+        fi
+        echo "dotnet-version=$EXACT_VERSION" >> $GITHUB_OUTPUT
+        echo "Installed .NET SDK version: $EXACT_VERSION"
+        dotnet --info
+        # Store apt dotnet location for reference
+        APT_DOTNET_DIR=$(dirname $(readlink -f $(which dotnet)))
+        echo "APT_DOTNET_DIR=$APT_DOTNET_DIR" >> $GITHUB_ENV
+
+    # Get unified SDK version from either source
+    - name: Get installed SDK version
+      id: sdk-version
+      shell: bash
+      run: |
+        if [ "${{ matrix.sdk-source }}" == "apt" ]; then
+          VERSION="${{ steps.setup-dotnet-apt.outputs.dotnet-version }}"
+        else
+          VERSION="${{ steps.get-exact-version.outputs.exact-version }}"
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Using SDK version: $VERSION"
+
+    - name: "Exact Version: ${{ steps.sdk-version.outputs.version }}${{ matrix.sdk-source == 'apt' && ' (apt)' || '' }}"
+      run: echo "Using .NET version ${{ steps.sdk-version.outputs.version }}"
 
     - name: Restore build cache
       id: cache-build
@@ -81,12 +162,12 @@ jobs:
       with:
         path: |
           ./.build-cache
-        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ steps.get-exact-version.outputs.exact-version }}-${{ matrix.project-type }}
+        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ matrix.sdk-source }}-${{ steps.sdk-version.outputs.version }}-${{ matrix.project-type }}
 
-    # global.json must be present for setup-dotnet to work.        
+    # global.json must be present for setup-dotnet to work.
     - name: Create temporary global.json
       id: create-temp-global-json
-      if: steps.cache-build.outputs.cache-hit != 'true'
+      if: matrix.sdk-source != 'apt' && steps.cache-build.outputs.cache-hit != 'true'
       shell: pwsh
       run: |
         $globalJson = @{
@@ -99,7 +180,7 @@ jobs:
     - name: Install .NET For The Test
       uses: actions/setup-dotnet@v5
       id: setup-dotnet
-      if: steps.cache-build.outputs.cache-hit != 'true'
+      if: matrix.sdk-source != 'apt' && steps.cache-build.outputs.cache-hit != 'true'
       with:
         dotnet-version: ${{ steps.get-exact-version.outputs.exact-version }}
 
@@ -120,7 +201,7 @@ jobs:
       shell: pwsh
       if: steps.cache-build.outputs.cache-hit != 'true'
       run: |
-        $version = "${{ steps.get-exact-version.outputs.exact-version }}"
+        $version = "${{ steps.sdk-version.outputs.version }}"
         $cleanedVersion = $version -replace '-servicing.*', ''
         echo "DOTNET_CLEANED_VERSION=$cleanedVersion" >> $env:GITHUB_ENV
         echo "Cleaned version: $cleanedVersion"
@@ -138,7 +219,7 @@ jobs:
         java-version: 17
 
     - name: Install Android SDK
-      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15' || matrix.os == 'windows-11-arm') && steps.cache-build.outputs.cache-hit != 'true'
+      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && (matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15' || matrix.os == 'windows-11-arm') && steps.cache-build.outputs.cache-hit != 'true'
       uses: android-actions/setup-android@v3
       with:
           cmdline-tools-version: 10406996
@@ -156,7 +237,7 @@ jobs:
       uses: maxim-lobanov/setup-xcode@v1
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
       with:
-        xcode-version: ${{ matrix.dotnet-version == '9.0' && '26.0' || '26.1' }}
+        xcode-version: ${{ matrix.dotnet-version == '9.0' && '26.0' || '26.2' }}
 
     - name: Configure Xcode
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
@@ -195,7 +276,7 @@ jobs:
     - name: Set ref version for Assembly Locator
       shell: pwsh
       if:  steps.cache-build.outputs.cache-hit != 'true'
-      run: ./Build.ps1 set-ref-version ${{ steps.setup-dotnet.outputs.dotnet-version }} --nologo
+      run: ./Build.ps1 set-ref-version ${{ steps.sdk-version.outputs.version }} --nologo
 
     - name: Create project
       shell: pwsh
@@ -223,11 +304,11 @@ jobs:
       uses: actions/cache/save@v4
       with:
         path: ./.build-cache
-        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ steps.setup-dotnet.outputs.dotnet-version }}-${{ matrix.project-type }}
+        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ matrix.sdk-source }}-${{ steps.sdk-version.outputs.version }}-${{ matrix.project-type }}
 
   # Generate test summary after all tests complete
   generate-summary:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build  # Wait for all matrix jobs to complete
     if: always()  # Run even if some tests failed
     
@@ -257,39 +338,58 @@ jobs:
             run_id: context.runId
           });
           
-          // Get all jobs for this workflow run
-          const { data: jobsData } = await github.rest.actions.listJobsForWorkflowRun({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            run_id: context.runId,
-            per_page: 100
-          });
+          // Get all jobs for this workflow run (paginated - API max is 100 per page)
+          let allJobs = [];
+          let page = 1;
+          while (true) {
+            const { data: jobsData } = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+              per_page: 100,
+              page: page
+            });
+            allJobs = allJobs.concat(jobsData.jobs);
+            if (jobsData.jobs.length < 100) break;
+            page++;
+          }
+          console.log(`Fetched ${allJobs.length} jobs across ${page} page(s)`);
           
           // Parse matrix jobs (skip the summary job itself)
-          const results = jobsData.jobs
+          // Job name format: build (os, dotnet-version, project-type, sdk-source)
+          // Note: Order matches matrix definition order in YAML
+          const results = allJobs
             .filter(job => job.name.startsWith('build ('))
             .map(job => {
-              const match = job.name.match(/build \(([^,]+), ([^,]+), ([^)]+)\)/);
+              const match = job.name.match(/build \(([^,]+), ([^,]+), ([^,]+), ([^)]+)\)/);
               if (match) {
                 // Extract exact version from job steps
                 let exactVersion = match[2]; // Default to matrix version
                 if (job.steps) {
-                  const versionStep = job.steps.find(step => 
+                  const versionStep = job.steps.find(step =>
                     step.name && step.name.startsWith('Exact Version: ')
                   );
                   if (versionStep) {
-                    const versionMatch = versionStep.name.match(/^Exact Version: (.+)$/);
+                    // Handle both "Exact Version: X.Y.Z" and "Exact Version: X.Y.Z (apt)"
+                    const versionMatch = versionStep.name.match(/^Exact Version: ([^\s(]+)/);
                     if (versionMatch) {
                       exactVersion = versionMatch[1];
                     }
                   }
                 }
-                
+
+                const projectType = match[3];
+                const sdkSource = match[4];
+                // Create composite OS identifier that includes sdk-source for apt
+                const osDisplay = sdkSource === 'apt' ? `${match[1]} (apt)` : match[1];
+
                 return {
                   os: match[1],
-                  dotnetVersion: match[2], 
+                  osDisplay: osDisplay,
+                  dotnetVersion: match[2],
+                  projectType: projectType,
+                  sdkSource: sdkSource,
                   exactVersion: exactVersion,
-                  projectType: match[3],
                   status: job.conclusion,
                   url: job.html_url
                 };
@@ -305,27 +405,32 @@ jobs:
           const failedJobs = results.filter(r => r.status === 'failure').length;
           const cancelledJobs = results.filter(r => r.status === 'cancelled').length;
           
-          // Group results by .NET version and collect exact versions
+          // Group results by .NET version -> sdk-source -> project-type -> os
           const versionGroups = {};
           const exactVersions = {};
-          
+
           results.forEach(result => {
             if (!versionGroups[result.dotnetVersion]) {
               versionGroups[result.dotnetVersion] = {};
             }
-            if (!versionGroups[result.dotnetVersion][result.projectType]) {
-              versionGroups[result.dotnetVersion][result.projectType] = {};
+            if (!versionGroups[result.dotnetVersion][result.sdkSource]) {
+              versionGroups[result.dotnetVersion][result.sdkSource] = {};
             }
-            versionGroups[result.dotnetVersion][result.projectType][result.os] = result;
-            
-            if (!exactVersions[result.dotnetVersion] && result.exactVersion) {
-              exactVersions[result.dotnetVersion] = result.exactVersion;
+            if (!versionGroups[result.dotnetVersion][result.sdkSource][result.projectType]) {
+              versionGroups[result.dotnetVersion][result.sdkSource][result.projectType] = {};
+            }
+            versionGroups[result.dotnetVersion][result.sdkSource][result.projectType][result.os] = result;
+
+            // Track exact versions per dotnet version and sdk-source
+            const exactKey = `${result.dotnetVersion}-${result.sdkSource}`;
+            if (!exactVersions[exactKey] && result.exactVersion) {
+              exactVersions[exactKey] = result.exactVersion;
             }
           });
-          
-          // Get all unique operating systems and project types
-          const allOS = [...new Set(results.map(r => r.os))].sort();
+
+          // Get unique values for rendering
           const allProjectTypes = [...new Set(results.map(r => r.projectType))].sort();
+          const sdkSources = ['setup-dotnet', 'apt']; // Fixed order
           
           // Generate markdown summary
           let markdown = `# 🧪 Platform Integration Tests Summary - ${branch}\n\n`;
@@ -336,7 +441,7 @@ jobs:
             const parseVersion = (version) => version.split('.').map(part => parseInt(part, 10) || 0);
             const versionA = parseVersion(a);
             const versionB = parseVersion(b);
-            
+
             for (let i = 0; i < Math.max(versionA.length, versionB.length); i++) {
               const partA = versionA[i] || 0;
               const partB = versionB[i] || 0;
@@ -344,38 +449,58 @@ jobs:
             }
             return 0;
           }).forEach(dotnetVersion => {
-            const exactVer = exactVersions[dotnetVersion];
-            const versionDisplay = exactVer && exactVer !== dotnetVersion 
-              ? `${dotnetVersion} (${exactVer})` 
-              : dotnetVersion;
-            markdown += `## .NET ${versionDisplay}\n\n`;
-            
-            // Table header
-            markdown += `| Project Type | ${allOS.join(' | ')} |\n`;
-            markdown += `|---|${allOS.map(() => '---').join('|')}|\n`;
-            
-            // Table rows
-            allProjectTypes.forEach(projectType => {
-              markdown += `| ${projectType} |`;
-              
-              allOS.forEach(os => {
-                const result = versionGroups[dotnetVersion][projectType] && versionGroups[dotnetVersion][projectType][os];
-                
-                if (result) {
-                  const statusIcon = result.status === 'success' ? '✅' : 
-                                   result.status === 'failure' ? '❌' : 
-                                   result.status === 'cancelled' ? '⚠️' : 
-                                   result.status === 'skipped' ? '🚫' : '❓';
-                  markdown += ` [${statusIcon}](${result.url}) |`;
-                } else {
-                  markdown += ` 🚫 |`;
-                }
+            markdown += `## .NET ${dotnetVersion}\n\n`;
+
+            // Create a table for each sdk-source
+            sdkSources.forEach(sdkSource => {
+              const sdkData = versionGroups[dotnetVersion][sdkSource];
+              if (!sdkData) return; // Skip if no data for this sdk-source
+
+              // Get OS list for this sdk-source (only OS that have results)
+              const osForSdkSource = [...new Set(
+                Object.values(sdkData).flatMap(projectData => Object.keys(projectData))
+              )].sort();
+
+              if (osForSdkSource.length === 0) return;
+
+              // Get exact version for this combination
+              const exactKey = `${dotnetVersion}-${sdkSource}`;
+              const exactVer = exactVersions[exactKey];
+              const versionDisplay = exactVer ? ` (${exactVer})` : '';
+
+              markdown += `### ${sdkSource}${versionDisplay}\n\n`;
+
+              // Table header
+              markdown += `| Project Type | ${osForSdkSource.join(' | ')} |\n`;
+              markdown += `|---|${osForSdkSource.map(() => '---').join('|')}|\n`;
+
+              // Table rows
+              allProjectTypes.forEach(projectType => {
+                // Check if this project type has any results for this sdk-source
+                const projectData = sdkData[projectType];
+                if (!projectData) return; // Skip project types with no results
+
+                markdown += `| ${projectType} |`;
+
+                osForSdkSource.forEach(os => {
+                  const result = projectData[os];
+
+                  if (result) {
+                    const statusIcon = result.status === 'success' ? '✅' :
+                                     result.status === 'failure' ? '❌' :
+                                     result.status === 'cancelled' ? '⚠️' :
+                                     result.status === 'skipped' ? '🚫' : '❓';
+                    markdown += ` [${statusIcon}](${result.url}) |`;
+                  } else {
+                    markdown += ` 🚫 |`;
+                  }
+                });
+
+                markdown += `\n`;
               });
-              
+
               markdown += `\n`;
             });
-            
-            markdown += `\n`;
           });
           
           // Create the issue body
