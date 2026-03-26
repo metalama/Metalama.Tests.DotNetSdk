@@ -18,7 +18,11 @@
       "Bash(echo:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(gh run:*)",
+      "Bash(dotnet build:*)",
+      "Bash(git fetch:*)",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "ask": []
