@@ -80,8 +80,13 @@ internal class CreateProjectCommand : BaseCommand<CreateProjectCommandSettings>
             }
 
 
+            // The set of target frameworks in the MAUI template may vary across SDK versions,
+            // so we replace the whole element dynamically instead of hardcoding the exact list.
+            var targetFrameworksLine = project.Split( '\n' )
+                .First( l => l.Contains( "<TargetFrameworks>", StringComparison.Ordinal ) );
+
             if ( !ReplaceInProject(
-                    $"<TargetFrameworks>{targetFramework}-android;{targetFramework}-ios;{targetFramework}-maccatalyst</TargetFrameworks>",
+                    targetFrameworksLine.Trim(),
                     $"<TargetFrameworks>{targetFramework}-android</TargetFrameworks>" ) )
             {
                 return false;
