@@ -85,11 +85,18 @@ internal class CreateProjectCommand : BaseCommand<CreateProjectCommandSettings>
             var targetFrameworksLine = project.Split( '\n' )
                 .First( l => l.Contains( "<TargetFrameworks>", StringComparison.Ordinal ) );
 
-            if ( !ReplaceInProject(
-                    targetFrameworksLine.Trim(),
-                    $"<TargetFrameworks>{targetFramework}-android</TargetFrameworks>" ) )
+            var androidOnly = $"<TargetFrameworks>{targetFramework}-android</TargetFrameworks>";
+
+            if ( targetFrameworksLine.Trim() != androidOnly )
             {
-                return false;
+                if ( !ReplaceInProject( targetFrameworksLine.Trim(), androidOnly ) )
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                context.Console.WriteMessage( "TargetFrameworks already contains only Android. No replacement needed." );
             }
 
             File.WriteAllText( projectFilePath, project );
