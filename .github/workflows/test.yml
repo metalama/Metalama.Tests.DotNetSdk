@@ -2,6 +2,45 @@ name: Platform Integration Tests
 
 on:
   workflow_dispatch:
+    inputs:
+      os:
+        description: 'Operating system (or "all" for full matrix)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - windows-latest
+          - windows-11-arm
+          - macos-15
+      dotnet-version:
+        description: '.NET SDK version (or "all" for full matrix)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - '8.0'
+          - '9.0'
+          - '10.0'
+      project-type:
+        description: 'Project type (or "all" for full matrix)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - console
+          - maui
+          - maui-blazor
+          - mvc
+          - razor
+          - blazor
+          - blazorwasm
+          - winforms
+          - wpf
 
 env:
   SUMMARY_ISSUE_NUMBER: 3  # Issue number for this branch
@@ -13,9 +52,11 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15] # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
-        dotnet-version: ['8.0', '9.0', '10.0' ]
-        project-type: ['console', 'maui', 'maui-blazor', 'mvc', 'razor', 'blazor', 'blazorwasm', 'winforms', 'wpf'] # dotnet new list
+        # When input is 'all' or empty, use full array; otherwise wrap single value in array
+        # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
+        os: ${{ inputs.os != 'all' && inputs.os != '' && fromJson(format('["{0}"]', inputs.os)) || fromJson('["ubuntu-latest", "ubuntu-24.04-arm", "windows-latest", "windows-11-arm", "macos-15"]') }}
+        dotnet-version: ${{ inputs.dotnet-version != 'all' && inputs.dotnet-version != '' && fromJson(format('["{0}"]', inputs.dotnet-version)) || fromJson('["8.0", "9.0", "10.0"]') }}
+        project-type: ${{ inputs.project-type != 'all' && inputs.project-type != '' && fromJson(format('["{0}"]', inputs.project-type)) || fromJson('["console", "maui", "maui-blazor", "mvc", "razor", "blazor", "blazorwasm", "winforms", "wpf"]') }}  # dotnet new list
         exclude:
           # WinForms and WPF are only available on Windows
           - project-type: winforms # N/A
