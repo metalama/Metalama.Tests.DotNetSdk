@@ -442,19 +442,13 @@ jobs:
     # just installed are unused, and deletes all of them -- so the build fails
     # with NETSDK1147. --skip-manifest-update keeps the install on the SDK's own
     # baseline manifests, so the install and the GC agree and the packs survive.
+    # Those surviving packs include Microsoft.Maui.Templates.netN, which already
+    # registers the maui / maui-blazor templates -- so, unlike the non-apt Linux
+    # path above, no separate `dotnet new install` is needed here (and it would
+    # fail with exit 106, since that template package is already present).
     - name: Install .NET Workloads (apt jobs)
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.sdk-source == 'apt' && steps.cache-build.outputs.cache-hit != 'true'
-      shell: pwsh
-      run: |
-        dotnet workload install maui-android --skip-manifest-update
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        # The maui-android workload does not register the MAUI project templates
-        # (maui, maui-blazor): they ship in the Microsoft.Maui.Templates.netN
-        # pack, which workload resolution installs transiently and then GC's.
-        # Install that pack explicitly so `dotnet new maui-blazor` works.
-        $major = '${{ matrix.dotnet-version }}'.Split('.')[0]
-        dotnet new install "Microsoft.Maui.Templates.net$major" --nuget-source https://api.nuget.org/v3/index.json
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      run: dotnet workload install maui-android --skip-manifest-update
 
     - name: Set ref version for Assembly Locator
       shell: pwsh
