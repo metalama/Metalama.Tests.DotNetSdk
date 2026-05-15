@@ -53,6 +53,39 @@ on:
 
 env:
   SUMMARY_ISSUE_NUMBER: 4  # Issue number for this branch
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # macOS MAUI version pins — UPDATE PERIODICALLY. See CLAUDE.md for the procedure.
+  # ═══════════════════════════════════════════════════════════════════════════
+  # On macOS the maui / maui-blazor jobs build the iOS and Mac Catalyst target
+  # frameworks. Those builds fail unless the active Xcode matches the Xcode the
+  # installed .NET iOS/MacCatalyst workload was built for:
+  #   error : This version of .NET for iOS (NN.N.xxxxx) requires Xcode NN.N.
+  #
+  # Two moving parts make "just use the latest" impossible:
+  #   1. The GitHub macos-15 runner image lags Apple's Xcode releases by weeks,
+  #      so the Xcode the latest workload wants is often not installed at all —
+  #      and maxim-lobanov/setup-xcode can only SELECT an Xcode already on the
+  #      image, it cannot download one. (We chased a hardcoded Xcode pin ~10
+  #      times; it always broke again when the workload's floor moved past the
+  #      image.)
+  #   2. Microsoft's iOS/MacCatalyst workloads lag the .NET SDK by a feature
+  #      band, so the very latest SDK has no matching iOS workload at all.
+  #
+  # So for these jobs we deliberately do NOT track "latest". Each .NET version is
+  # pinned to the newest dotnet/macios release whose required Xcode is present on
+  # the runner image. Each pin is one matched set: the SDK version (which equals
+  # the workload-set version) plus the Xcode that release requires. Sources:
+  #   - workload set + required Xcode: https://github.com/dotnet/macios/releases
+  #   - Xcode versions on the runner:  actions/runner-images macos-15 readme
+  # .NET 8 needs no SDK pin: its iOS workload is frozen at Xcode 16.0 (always on
+  # the image), so for .NET 8 only the Xcode selection matters.
+  MACOS_MAUI_SDK_9_0:   '9.0.313'     # dotnet-9.0.1xx-xcode26.2.9008   -> Xcode 26.3
+  MACOS_MAUI_SDK_10_0:  '10.0.202'    # dotnet-10.0.1xx-xcode26.2-10233 -> Xcode 26.3
+  MACOS_MAUI_XCODE_8_0:  '16.0'       # dotnet-8.0.1xx-xcode16.0-8319
+  MACOS_MAUI_XCODE_9_0:  '26.3'
+  MACOS_MAUI_XCODE_10_0: '26.3'
+  # ═══════════════════════════════════════════════════════════════════════════
 jobs:
 
   build:
@@ -146,9 +179,21 @@ jobs:
       if: matrix.sdk-source != 'apt'
       shell: pwsh
       run: |
-        $exactVersion = .\GetLatestVersion.ps1 -VersionPrefix "${{ matrix.dotnet-version }}"
+        # macOS maui/maui-blazor jobs build the iOS + Mac Catalyst TFMs and so need
+        # an SDK + workload set whose required Xcode is installed on the runner. The
+        # latest SDK does NOT qualify (see the macOS MAUI version pins in the env
+        # block above and CLAUDE.md), so for those jobs we use the pinned version.
+        # Every other job keeps tracking the latest SDK.
+        $isMacMaui = ('${{ matrix.os }}' -eq 'macos-15') -and ('${{ matrix.project-type }}' -eq 'maui' -or '${{ matrix.project-type }}' -eq 'maui-blazor')
+        $pin = @{ '9.0' = '${{ env.MACOS_MAUI_SDK_9_0 }}'; '10.0' = '${{ env.MACOS_MAUI_SDK_10_0 }}' }['${{ matrix.dotnet-version }}']
+        if ($isMacMaui -and $pin) {
+          $exactVersion = $pin
+          Write-Host "macOS MAUI job: pinned .NET ${{ matrix.dotnet-version }} to $exactVersion (Xcode-compatible workload set)."
+        } else {
+          $exactVersion = .\GetLatestVersion.ps1 -VersionPrefix "${{ matrix.dotnet-version }}"
+          Write-Host "Resolved ${{ matrix.dotnet-version }} to $exactVersion"
+        }
         "exact-version=$exactVersion" >> $env:GITHUB_OUTPUT
-        Write-Host "Resolved ${{ matrix.dotnet-version }} to $exactVersion"
         # Update job name to include exact version for summary parsing
         echo "JOB_EXACT_VERSION=$exactVersion" >> $env:GITHUB_ENV
 
@@ -283,11 +328,27 @@ jobs:
       shell: pwsh
       run: ./Build.ps1 prepare --sdk-version ${{ env.DOTNET_CLEANED_VERSION }} --nologo --no-progress; type global.json; type nuget.config;
 
-    - name: Install Xcode
+    # ─── Xcode selection — READ THIS BEFORE TOUCHING (this breakage keeps recurring) ───
+    #
+    # Symptom that reappeared ~10 times:
+    #   error : This version of .NET for iOS/MacCatalyst (NN.N.xxxxx) requires
+    #           Xcode NN.N. The current version of Xcode is MM.M.
+    #
+    # The .NET iOS/MacCatalyst workload demands a specific Xcode. We cannot simply
+    # take the newest Xcode: setup-xcode can only SELECT an Xcode already baked into
+    # the macos-15 runner image, and that image lags Apple by weeks. We also cannot
+    # take the newest workload: it routinely needs an Xcode the image does not have
+    # yet. The full rationale is on the macOS MAUI version pins in the env block at
+    # the top of this file; CLAUDE.md documents how to move the pins forward.
+    #
+    # So we select the exact Xcode that the PINNED workload set requires. The Xcode
+    # and SDK pins are one matched dotnet/macios release and are bumped together.
+    # ───────────────────────────────────────────────────────────────────────────────
+    - name: Select Xcode
       uses: maxim-lobanov/setup-xcode@v1
-      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
+      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15' && steps.cache-build.outputs.cache-hit != 'true'
       with:
-        xcode-version: ${{ matrix.dotnet-version == '9.0' && '26.0' || '26.2' }}
+        xcode-version: ${{ matrix.dotnet-version == '8.0' && env.MACOS_MAUI_XCODE_8_0 || matrix.dotnet-version == '9.0' && env.MACOS_MAUI_XCODE_9_0 || env.MACOS_MAUI_XCODE_10_0 }}
 
     - name: Configure Xcode
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
@@ -321,7 +382,24 @@ jobs:
     - name: Install .NET Workloads
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor')  && steps.cache-build.outputs.cache-hit != 'true'
       shell: pwsh
-      run: dotnet workload install ${{ (matrix.os == 'windows-latest' || matrix.os == 'windows-11-arm') && 'maui' || 'maui-android' }}${{ matrix.os == 'macos-15' && ' && dotnet workload install maui-ios && dotnet workload install maui-maccatalyst' || '' }}
+      run: |
+        $os = '${{ matrix.os }}'
+        if ($os -eq 'windows-latest' -or $os -eq 'windows-11-arm') {
+          dotnet workload install maui
+        } elseif ($os -eq 'macos-15') {
+          # macOS builds the iOS + Mac Catalyst TFMs. Pin the workload set to the
+          # same Xcode-compatible version as the SDK (see the macOS MAUI version
+          # pins in the env block and CLAUDE.md) so it does not resolve to a newer
+          # workload that needs an Xcode absent from the runner image. .NET 8 has
+          # no band conflict and no documented workload set, so it installs unpinned.
+          $pinArgs = if ('${{ matrix.dotnet-version }}' -eq '8.0') { @() } else { @('--version', '${{ steps.get-exact-version.outputs.exact-version }}') }
+          foreach ($wl in 'maui-android', 'maui-ios', 'maui-maccatalyst') {
+            dotnet workload install $wl @pinArgs
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+        } else {
+          dotnet workload install maui-android
+        }
 
     - name: Set ref version for Assembly Locator
       shell: pwsh
@@ -457,7 +535,7 @@ jobs:
           
           // Group results by .NET version -> sdk-source -> project-type -> os
           const versionGroups = {};
-          const exactVersions = {};
+          const exactVersionCounts = {};
 
           results.forEach(result => {
             if (!versionGroups[result.dotnetVersion]) {
@@ -471,11 +549,25 @@ jobs:
             }
             versionGroups[result.dotnetVersion][result.sdkSource][result.projectType][result.os] = result;
 
-            // Track exact versions per dotnet version and sdk-source
-            const exactKey = `${result.dotnetVersion}-${result.sdkSource}`;
-            if (!exactVersions[exactKey] && result.exactVersion) {
-              exactVersions[exactKey] = result.exactVersion;
+            // Tally exact SDK versions per .NET band + sdk-source. Most cells use
+            // the latest SDK; some (e.g. macOS MAUI) are pinned to an older one, so
+            // the headline is the most common version and deviating cells are annotated.
+            if (result.exactVersion) {
+              const exactKey = `${result.dotnetVersion}-${result.sdkSource}`;
+              if (!exactVersionCounts[exactKey]) {
+                exactVersionCounts[exactKey] = {};
+              }
+              const counts = exactVersionCounts[exactKey];
+              counts[result.exactVersion] = (counts[result.exactVersion] || 0) + 1;
             }
+          });
+
+          // Pick the most common exact version per .NET band + sdk-source as the headline.
+          const exactVersions = {};
+          Object.keys(exactVersionCounts).forEach(exactKey => {
+            const counts = exactVersionCounts[exactKey];
+            exactVersions[exactKey] = Object.keys(counts)
+              .sort((a, b) => counts[b] - counts[a])[0];
           });
 
           // Get unique values for rendering
@@ -540,7 +632,12 @@ jobs:
                                      result.status === 'failure' ? '❌' :
                                      result.status === 'cancelled' ? '⚠️' :
                                      result.status === 'skipped' ? '🚫' : '❓';
-                    markdown += ` [${statusIcon}](${result.url}) |`;
+                    // Show the SDK version when this cell used a different one than
+                    // the table headline (e.g. macOS MAUI jobs pinned to an older SDK).
+                    const versionSuffix = result.exactVersion && result.exactVersion !== exactVer
+                      ? ` ${result.exactVersion}`
+                      : '';
+                    markdown += ` [${statusIcon}](${result.url})${versionSuffix} |`;
                   } else {
                     markdown += ` 🚫 |`;
                   }
