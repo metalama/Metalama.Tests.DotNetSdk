@@ -150,7 +150,19 @@ jobs:
           - os: ubuntu-24.04-arm
             dotnet-version: '10.0'
             sdk-source: apt
-          
+
+          # .NET 8 MAUI is not testable on the apt SDK: the Canonical-packaged
+          # .NET 8 SDK does not recognize the maui-android workload (`dotnet
+          # workload install maui-android` fails immediately with "Workload ID
+          # maui-android is not recognized"). .NET 9/10 apt SDKs do support it.
+          # .NET 8 MAUI is still covered by the setup-dotnet jobs on every OS.
+          - dotnet-version: '8.0'
+            project-type: maui
+            sdk-source: apt
+          - dotnet-version: '8.0'
+            project-type: maui-blazor
+            sdk-source: apt
+
       fail-fast: false # Don't stop other jobs if one fails.
       max-parallel: 8 # Give a chance to stop early when we run manually.
 
