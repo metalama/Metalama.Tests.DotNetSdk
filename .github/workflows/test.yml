@@ -434,21 +434,33 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         }
 
-    # Workload install for apt MAUI jobs. The Canonical apt SDK is a fixed patch
-    # (e.g. 10.0.107); a plain `dotnet workload install` first auto-updates to
-    # the newest workload SET (e.g. 10.0.108), which is newer than that SDK. The
-    # garbage-collection pass that ends every install then resolves the SDK's
-    # feature band against the mismatched set, decides the maui-android packs it
-    # just installed are unused, and deletes all of them -- so the build fails
-    # with NETSDK1147. --skip-manifest-update keeps the install on the SDK's own
-    # baseline manifests, so the install and the GC agree and the packs survive.
-    # Those surviving packs include Microsoft.Maui.Templates.netN, which already
+    # Workload install for apt MAUI jobs.
+    #
+    # .NET 9/10: the Canonical apt SDK is a fixed patch (e.g. 10.0.107); a plain
+    # `dotnet workload install` first auto-updates to the newest workload SET
+    # (e.g. 10.0.108), newer than that SDK. The garbage-collection pass that ends
+    # every install then resolves the SDK's feature band against the mismatched
+    # set, treats the maui-android packs it just installed as unused, and deletes
+    # them all -- so the build fails with NETSDK1147. --skip-manifest-update
+    # keeps the install on the SDK's own baseline manifests, so install and GC
+    # agree and the packs survive (including Microsoft.Maui.Templates.netN, which
     # registers the maui / maui-blazor templates -- so, unlike the non-apt Linux
-    # path above, no separate `dotnet new install` is needed here (and it would
-    # fail with exit 106, since that template package is already present).
+    # path above, no separate `dotnet new install` is needed).
+    #
+    # .NET 8: it has no workload set, and the apt 8.0 SDK's baseline manifests do
+    # not even define the maui-android workload, so --skip-manifest-update there
+    # fails with "Workload ID maui-android is not recognized". .NET 8 must update
+    # its manifests; with no workload set there is no set/SDK mismatch, so that
+    # plain install's GC is not destructive.
     - name: Install .NET Workloads (apt jobs)
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.sdk-source == 'apt' && steps.cache-build.outputs.cache-hit != 'true'
-      run: dotnet workload install maui-android --skip-manifest-update
+      shell: pwsh
+      run: |
+        if ('${{ matrix.dotnet-version }}' -eq '8.0') {
+          dotnet workload install maui-android
+        } else {
+          dotnet workload install maui-android --skip-manifest-update
+        }
 
     - name: Set ref version for Assembly Locator
       shell: pwsh
