@@ -284,12 +284,32 @@ jobs:
       with:
         fetch-depth: 0
 
+    # A dotnet host resolves SDKs only from its own install root (there is no
+    # multilevel lookup on Linux), so the engineering SDK and the test SDK must
+    # live in the SAME root or one of them is invisible. For non-apt jobs both
+    # come from setup-dotnet, which always installs into /usr/share/dotnet, so a
+    # single setup-dotnet step is enough. For apt jobs the test SDK is in apt's
+    # root (/usr/lib/dotnet), so the engineering SDK is installed there too --
+    # see the apt-specific step below.
     - name: Install .NET For Engineering
       uses: actions/setup-dotnet@v4
       id: setup-dotnet-eng
-      if: steps.cache-build.outputs.cache-hit != 'true'
+      if: matrix.sdk-source != 'apt' && steps.cache-build.outputs.cache-hit != 'true'
       with:
         dotnet-version: 9.0.3xx # Keep in sync with eng\src\global.json.
+
+    # apt jobs: install the engineering SDK into apt's dotnet root so that one
+    # dotnet host sees both the apt-provided test SDK and the engineering SDK.
+    # setup-dotnet cannot target a custom directory, so use dotnet-install.sh.
+    - name: Install .NET For Engineering (apt jobs)
+      if: matrix.sdk-source == 'apt' && steps.cache-build.outputs.cache-hit != 'true'
+      run: |
+        curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+        chmod +x /tmp/dotnet-install.sh
+        # 9.0.3xx feature band — keep in sync with eng/src/global.json.
+        sudo /tmp/dotnet-install.sh --channel 9.0.3xx --install-dir "$APT_DOTNET_DIR" --no-path
+        echo "Engineering SDK installed into $APT_DOTNET_DIR; SDKs now visible:"
+        dotnet --list-sdks
 
     - name: Clean up .NET version
       shell: pwsh
