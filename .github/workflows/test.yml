@@ -439,7 +439,7 @@ jobs:
           
           // Group results by .NET version and collect exact versions
           const versionGroups = {};
-          const exactVersions = {};
+          const exactVersionCounts = {};
           
           results.forEach(result => {
             if (!versionGroups[result.dotnetVersion]) {
@@ -450,9 +450,24 @@ jobs:
             }
             versionGroups[result.dotnetVersion][result.projectType][result.os] = result;
             
-            if (!exactVersions[result.dotnetVersion] && result.exactVersion) {
-              exactVersions[result.dotnetVersion] = result.exactVersion;
+            // Tally exact SDK versions per .NET band. Most cells use the latest
+            // SDK; some (e.g. macOS MAUI) are pinned to an older one, so the band
+            // headline is the most common version and deviating cells are annotated.
+            if (result.exactVersion) {
+              if (!exactVersionCounts[result.dotnetVersion]) {
+                exactVersionCounts[result.dotnetVersion] = {};
+              }
+              const counts = exactVersionCounts[result.dotnetVersion];
+              counts[result.exactVersion] = (counts[result.exactVersion] || 0) + 1;
             }
+          });
+
+          // Pick the most common exact version per .NET band as the table headline.
+          const exactVersions = {};
+          Object.keys(exactVersionCounts).forEach(dotnetVersion => {
+            const counts = exactVersionCounts[dotnetVersion];
+            exactVersions[dotnetVersion] = Object.keys(counts)
+              .sort((a, b) => counts[b] - counts[a])[0];
           });
           
           // Get all unique operating systems and project types
@@ -498,7 +513,12 @@ jobs:
                                    result.status === 'failure' ? '❌' : 
                                    result.status === 'cancelled' ? '⚠️' : 
                                    result.status === 'skipped' ? '🚫' : '❓';
-                  markdown += ` [${statusIcon}](${result.url}) |`;
+                  // Show the SDK version when this cell used a different one than
+                  // the table headline (e.g. macOS MAUI jobs pinned to an older SDK).
+                  const versionSuffix = result.exactVersion && result.exactVersion !== exactVer
+                    ? ` ${result.exactVersion}`
+                    : '';
+                  markdown += ` [${statusIcon}](${result.url})${versionSuffix} |`;
                 } else {
                   markdown += ` 🚫 |`;
                 }
