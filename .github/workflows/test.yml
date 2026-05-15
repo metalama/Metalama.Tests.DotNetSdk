@@ -165,7 +165,7 @@ jobs:
       TEAMCITY_CLOUD_TOKEN: ${{ secrets.TEAMCITY_CLOUD_TOKEN }}
       ConsoleAnsi: ${{ (matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15') && 'No' || 'Detect' }} # https://github.com/orgs/community/discussions/136868
       MetalamaAssemblyLocatorHooksDirectory: '../..'
-      CacheKeyPrefix: '101' # Increase this value to invalidate the cache.
+      CacheKeyPrefix: '102' # Increase this value to invalidate the cache.
 
     steps:
 
@@ -418,6 +418,18 @@ jobs:
           }
         } else {
           dotnet workload install maui-android
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The maui-android workload (the only MAUI workload installable on
+          # Linux) does not register the MAUI project templates: they ship in
+          # the Microsoft.Maui.Templates.netN pack, which workload resolution
+          # installs transiently and then garbage-collects. Without it
+          # `dotnet new maui` / `maui-blazor` fail with "no templates found".
+          # Install that pack explicitly. Windows uses the full `maui` workload
+          # (templates included) and macOS keeps them via its maui-ios pack, so
+          # only the Linux path needs this.
+          $major = '${{ matrix.dotnet-version }}'.Split('.')[0]
+          dotnet new install "Microsoft.Maui.Templates.net$major" --nuget-source https://api.nuget.org/v3/index.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         }
 
     - name: Set ref version for Assembly Locator
