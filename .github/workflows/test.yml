@@ -210,30 +210,29 @@ jobs:
         # Backports PPA uses "dotnetX" naming (e.g., dotnet8, dotnet9, dotnet10)
         DOTNET_MAJOR=$(echo "${{ matrix.dotnet-version }}" | cut -d. -f1)
         sudo apt-get install -y dotnet${DOTNET_MAJOR}
-        # Get actual installed version from --list-sdks (dotnet --version can be wrong due to apt bug)
-        # Take the latest version matching DOTNET_MAJOR
-        EXACT_VERSION=$(dotnet --list-sdks | grep "^${DOTNET_MAJOR}\." | cut -d' ' -f1 | sort -V | tail -1)
-        # Workaround: apt on Ubuntu may report incorrect patch version (e.g., 9.0.113 when actual is 9.0.112)
-        # Apply N -> N-1 patch version downgrade for all Ubuntu variants
-        if [[ "${{ matrix.os }}" == ubuntu-* ]]; then
-          # Extract major.minor.patch components
-          MAJOR_MINOR=$(echo "$EXACT_VERSION" | cut -d. -f1-2)
-          PATCH=$(echo "$EXACT_VERSION" | cut -d. -f3)
-          echo "Detected version components: MAJOR_MINOR=$MAJOR_MINOR, PATCH=$PATCH"
-          # Check if PATCH is a number and >= 1
-          if [[ "$PATCH" =~ ^[0-9]+$ ]] && [ "$PATCH" -ge 1 ]; then
-            NEW_PATCH=$((PATCH - 1))
-            DOWNGRADED_VERSION="${MAJOR_MINOR}.${NEW_PATCH}"
-            echo "Applying workaround: $EXACT_VERSION -> $DOWNGRADED_VERSION (apt bug on ${{ matrix.os }})"
-            EXACT_VERSION="$DOWNGRADED_VERSION"
-          fi
+        # Resolve the SDK version from the folders apt actually created under
+        # <dotnet-root>/sdk. A folder name there IS an installed SDK, so the
+        # version we pin can never be one that is missing from disk, and it
+        # adapts to whatever apt installs.
+        #
+        # Do NOT derive the version from apt/dpkg metadata or `dotnet --version`:
+        # the Ubuntu dotnet/backports PPA versions its packages on a scheme of
+        # its own that does not match the real .NET SDK version. An earlier blind
+        # `N -> N-1` patch correction tried to compensate for that gap, but the
+        # gap is not a fixed offset, so it ended up pinning versions that were
+        # never installed (e.g. apt installed 10.0.107, the correction pinned the
+        # non-existent 10.0.106).
+        APT_DOTNET_DIR=$(dirname $(readlink -f $(which dotnet)))
+        echo "APT_DOTNET_DIR=$APT_DOTNET_DIR" >> $GITHUB_ENV
+        EXACT_VERSION=$(ls "$APT_DOTNET_DIR/sdk" | grep "^${DOTNET_MAJOR}\." | sort -V | tail -1)
+        if [ -z "$EXACT_VERSION" ]; then
+          echo "::error::apt installed no .NET ${DOTNET_MAJOR} SDK under $APT_DOTNET_DIR/sdk"
+          ls -la "$APT_DOTNET_DIR/sdk" || true
+          exit 1
         fi
         echo "dotnet-version=$EXACT_VERSION" >> $GITHUB_OUTPUT
         echo "Installed .NET SDK version: $EXACT_VERSION"
         dotnet --info
-        # Store apt dotnet location for reference
-        APT_DOTNET_DIR=$(dirname $(readlink -f $(which dotnet)))
-        echo "APT_DOTNET_DIR=$APT_DOTNET_DIR" >> $GITHUB_ENV
 
     # Get unified SDK version from either source
     - name: Get installed SDK version
