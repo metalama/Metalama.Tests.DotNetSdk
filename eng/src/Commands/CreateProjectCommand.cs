@@ -80,11 +80,23 @@ internal class CreateProjectCommand : BaseCommand<CreateProjectCommandSettings>
             }
 
 
-            if ( !ReplaceInProject(
-                    $"<TargetFrameworks>{targetFramework}-android;{targetFramework}-ios;{targetFramework}-maccatalyst</TargetFrameworks>",
-                    $"<TargetFrameworks>{targetFramework}-android</TargetFrameworks>" ) )
+            // The set of target frameworks in the MAUI template may vary across SDK versions,
+            // so we replace the whole element dynamically instead of hardcoding the exact list.
+            var targetFrameworksLine = project.Split( '\n' )
+                .First( l => l.Contains( "<TargetFrameworks>", StringComparison.Ordinal ) );
+
+            var androidOnly = $"<TargetFrameworks>{targetFramework}-android</TargetFrameworks>";
+
+            if ( targetFrameworksLine.Trim() != androidOnly )
             {
-                return false;
+                if ( !ReplaceInProject( targetFrameworksLine.Trim(), androidOnly ) )
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                context.Console.WriteMessage( "TargetFrameworks already contains only Android. No replacement needed." );
             }
 
             File.WriteAllText( projectFilePath, project );
