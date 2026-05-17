@@ -53,7 +53,7 @@ on:
           - apt
 
 env:
-  SUMMARY_ISSUE_NUMBER: 74  # Issue number for this branch
+  SUMMARY_ISSUE_NUMBER: 7  # Issue number for this branch
 
   # ═══════════════════════════════════════════════════════════════════════════
   # macOS MAUI version pins — UPDATE PERIODICALLY. See CLAUDE.md for the procedure.
