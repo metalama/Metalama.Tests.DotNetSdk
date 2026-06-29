@@ -50,3 +50,4 @@ launchSettings.json
 nuget.config
 global.json
 eng/docket-context/.g/
+.g/
