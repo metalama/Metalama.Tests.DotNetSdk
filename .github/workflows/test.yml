@@ -14,7 +14,7 @@ on:
           - ubuntu-24.04
           - ubuntu-24.04-arm
           - windows-latest
-          - windows-11-arm
+          - windows-11-vs2026-arm
           - macos-15
       dotnet-version:
         description: '.NET SDK version (or "all" for full matrix)'
@@ -287,7 +287,7 @@ jobs:
       matrix:
         # When input is 'all' or empty, use full array; otherwise wrap single value in array
         # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
-        os: ${{ inputs.os != 'all' && inputs.os != '' && fromJson(format('["{0}"]', inputs.os)) || fromJson('["ubuntu-24.04", "ubuntu-22.04", "ubuntu-24.04-arm", "windows-latest", "windows-11-arm", "macos-15"]') }}
+        os: ${{ inputs.os != 'all' && inputs.os != '' && fromJson(format('["{0}"]', inputs.os)) || fromJson('["ubuntu-24.04", "ubuntu-22.04", "ubuntu-24.04-arm", "windows-latest", "windows-11-vs2026-arm", "macos-15"]') }}
         dotnet-version: ${{ inputs.dotnet-version != 'all' && inputs.dotnet-version != '' && fromJson(format('["{0}"]', inputs.dotnet-version)) || fromJson('["8.0", "9.0", "10.0"]') }}
         project-type: ${{ inputs.project-type != 'all' && inputs.project-type != '' && fromJson(format('["{0}"]', inputs.project-type)) || fromJson('["console", "maui", "maui-blazor", "mvc", "razor", "blazor", "blazorwasm", "winforms", "wpf"]') }}  # dotnet new list
         sdk-source: ${{ inputs.sdk-source != 'all' && inputs.sdk-source != '' && fromJson(format('["{0}"]', inputs.sdk-source)) || fromJson('["setup-dotnet", "setup-dotnet-x86", "apt"]') }}
@@ -325,20 +325,20 @@ jobs:
           - project-type: maui-blazor
             os:  ubuntu-24.04-arm
           - project-type: maui
-            os:  windows-11-arm
+            os:  windows-11-vs2026-arm
           - project-type: maui-blazor
-            os:  windows-11-arm
+            os:  windows-11-vs2026-arm
 
           # apt SDK source only for Ubuntu
           - sdk-source: apt
             os: windows-latest
           - sdk-source: apt
-            os: windows-11-arm
+            os: windows-11-vs2026-arm
           - sdk-source: apt
             os: macos-15
 
           # The x86 SDK is Windows-only, and only makes sense on an x64 host:
-          # windows-11-arm has no x86 .NET SDK, and Linux/macOS ship none at all.
+          # windows-11-vs2026-arm has no x86 .NET SDK, and Linux/macOS ship none at all.
           - sdk-source: setup-dotnet-x86
             os: ubuntu-24.04
           - sdk-source: setup-dotnet-x86
@@ -346,7 +346,7 @@ jobs:
           - sdk-source: setup-dotnet-x86
             os: ubuntu-24.04-arm
           - sdk-source: setup-dotnet-x86
-            os: windows-11-arm
+            os: windows-11-vs2026-arm
           - sdk-source: setup-dotnet-x86
             os: macos-15
 
@@ -360,7 +360,7 @@ jobs:
 
           # ── MSBuild.exe axis ─────────────────────────────────────────────────
           # MSBuild.exe ships with Visual Studio, which exists only on the Windows
-          # runner images (windows-latest and windows-11-arm both carry VS 2022
+          # runner images (windows-latest and windows-11-vs2026-arm both carry VS 2022
           # Enterprise). There is no MSBuild.exe on Linux or macOS.
           - build-tool: msbuild-x64
             os: ubuntu-24.04
@@ -392,9 +392,9 @@ jobs:
           - build-tool: msbuild-arm64
             os: windows-latest
           - build-tool: msbuild-x64
-            os: windows-11-arm
+            os: windows-11-vs2026-arm
           - build-tool: msbuild-x86
-            os: windows-11-arm
+            os: windows-11-vs2026-arm
 
           # Keep the build-tool and sdk-source axes from multiplying out: MSBuild
           # is exercised against the normal x64 SDK only, and the x86 SDK is
@@ -682,7 +682,7 @@ jobs:
         java-version: 17
 
     - name: Install Android SDK
-      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && (matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15' || matrix.os == 'windows-11-arm') && steps.cache-build.outputs.cache-hit != 'true'
+      if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && (matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15' || matrix.os == 'windows-11-vs2026-arm') && steps.cache-build.outputs.cache-hit != 'true'
       uses: android-actions/setup-android@v3
       with:
           cmdline-tools-version: 10406996
@@ -754,7 +754,7 @@ jobs:
       shell: pwsh
       run: |
         $os = '${{ matrix.os }}'
-        if ($os -eq 'windows-latest' -or $os -eq 'windows-11-arm') {
+        if ($os -eq 'windows-latest' -or $os -eq 'windows-11-vs2026-arm') {
           dotnet workload install maui
         } elseif ($os -eq 'macos-15') {
           # macOS builds the iOS + Mac Catalyst TFMs. Pin the workload set to the
@@ -829,6 +829,35 @@ jobs:
       if: startsWith(matrix.build-tool, 'msbuild') && steps.cache-build.outputs.cache-hit != 'true'
       with:
         msbuild-architecture: ${{ matrix.build-tool == 'msbuild-x64' && 'x64' || matrix.build-tool == 'msbuild-arm64' && 'arm64' || 'x86' }}
+
+    # `msbuild -version` reports the PRODUCT version, which is identical for every
+    # host architecture and so cannot tell them apart -- msbuild-x64 and msbuild-x86
+    # both reported "18.7.8". Read the PE header machine type instead, which is the
+    # actual bitness of the binary that setup-msbuild put on PATH.
+    #
+    # This exists to answer a specific question: Visual Studio 2026 is 64-bit only,
+    # so Bin\MSBuild.exe (the path used for msbuild-architecture: x86) may no longer
+    # be a 32-bit host. If this prints x64 for the msbuild-x86 job, that matrix value
+    # is silently duplicating msbuild-x64 and should be dropped rather than paid for.
+    - name: Report MSBuild host architecture
+      if: startsWith(matrix.build-tool, 'msbuild') && steps.cache-build.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: |
+        $path = (Get-Command msbuild).Source
+        $stream = [IO.File]::OpenRead($path)
+        try {
+          $reader = New-Object IO.BinaryReader($stream)
+          $stream.Position = 0x3C
+          $stream.Position = $reader.ReadInt32() + 4   # PE signature + COFF header
+          $machine = $reader.ReadUInt16()
+        } finally { $stream.Dispose() }
+        $arch = switch ($machine) {
+          0x014C  { 'x86' }
+          0x8664  { 'x64' }
+          0xAA64  { 'arm64' }
+          default { '0x{0:X4}' -f $machine }
+        }
+        Write-Host "::notice::build-tool=${{ matrix.build-tool }} resolved to $path (PE machine type: $arch)"
 
     - name: Build
       shell: pwsh

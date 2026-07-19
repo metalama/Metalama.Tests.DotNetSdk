@@ -227,8 +227,14 @@ MAUI workloads for win-x86. This is not fixable; the excludes are permanent.
 
 `build-tool` selects what drives the build: the `dotnet` CLI (baseline) or the
 .NET Framework `MSBuild.exe` from Visual Studio. Both Windows runner images carry
-Visual Studio Enterprise 2022, so `msbuild-x64`/`msbuild-x86` run on
-`windows-latest` and `msbuild-arm64` on `windows-11-arm`. There is no
+Visual Studio, so `msbuild-x64`/`msbuild-x86` run on `windows-latest` and
+`msbuild-arm64` on `windows-11-vs2026-arm`.
+
+**Windows ARM uses the `windows-11-vs2026-arm` image, not `windows-11-arm`.** The
+plain ARM image ships VS 2022 (MSBuild 17.14), and the .NET 10 SDK requires MSBuild
+>= 18.0 — so `MSBuild.exe` there fails with `Could not resolve SDK
+"Microsoft.NET.Sdk"`. `windows-latest` already carries MSBuild 18.7 despite what the
+runner-image readme says; trust the job log over the readme. There is no
 `MSBuild.exe` on Linux or macOS, so the axis is excluded there entirely.
 
 MSBuild is located with `microsoft/setup-msbuild@v2`, which uses `vswhere`.
