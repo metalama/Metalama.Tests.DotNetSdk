@@ -99,9 +99,182 @@ env:
   MACOS_MAUI_XCODE_9_0:  '26.3'
   MACOS_MAUI_XCODE_10_0: '26.3'
   # ═══════════════════════════════════════════════════════════════════════════
+
+  # Workflow-level so the dependency-seeding jobs can key their caches on it too.
+  CacheKeyPrefix: '2026.1-1' # Increase this value to invalidate the cache.
+
 jobs:
 
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Dependency seeding — keeps the TeamCity artifacts off the company uplink.
+  # ═══════════════════════════════════════════════════════════════════════════
+  # The Metalama artifacts are served from a self-hosted TeamCity on a LAN with
+  # limited upstream bandwidth. Left alone, every matrix job downloads them, so a
+  # full run pulls the same payload a couple of hundred times over that link.
+  #
+  # Instead, exactly one job per runner platform downloads them and stores them in
+  # the GitHub Actions cache; every matrix job restores from there. Two properties
+  # of PostSharp.Engineering make this work with no changes on its side:
+  #
+  #   1. DownloadBuild writes a `.completed` sentinel next to the artifacts and
+  #      skips the download outright when it already exists, so a restored tree is
+  #      reused verbatim.
+  #   2. The absolute paths baked into nuget.config and eng/Versions.*.g.props do
+  #      not need to survive the cache: every job regenerates them locally in
+  #      `Build.ps1 prepare`. Only the artifacts themselves must be restored.
+  #
+  # Cache lifetime is GitHub's own: entries unused for 7 days are evicted, and the
+  # repository-wide 10 GB budget is reclaimed least-recently-used. There is no
+  # per-entry TTL to set -- one week is what the platform already does.
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  # Resolve "latest Metalama build on this branch" ONCE, and publish the resolved
+  # build number to every downstream job. Beyond making the cache key stable
+  # across runs, this removes a real hazard: each job used to resolve the branch
+  # independently, so a Metalama build completing mid-run would silently split the
+  # matrix across two different Metalama versions.
+  resolve-dependencies:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      IS_POSTSHARP_OWNED: true
+      TEAMCITY_CLOUD_TOKEN: ${{ secrets.TEAMCITY_CLOUD_TOKEN }}
+      ConsoleAnsi: 'No'
+    outputs:
+      build-number: ${{ steps.resolve.outputs.build-number }}
+      build-type-id: ${{ steps.resolve.outputs.build-type-id }}
+      deps-id: ${{ steps.resolve.outputs.deps-id }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install .NET For Engineering
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: 9.0.3xx # Keep in sync with eng/src/global.json.
+
+    # PostSharp.Engineering derives the artifact cache location from USERPROFILE
+    # and falls back to Path.GetTempPath() when it is unset -- which on Linux and
+    # macOS it always is. On macOS that fallback is a volatile per-session
+    # /var/folders/... path, which cannot be cached. Pointing USERPROFILE at HOME
+    # gives the same $HOME/.build-artifacts location on every platform.
+    - name: Pin the artifact cache location
+      if: runner.os != 'Windows'
+      run: echo "USERPROFILE=$HOME" >> $GITHUB_ENV
+
+    - name: Configure the dependency to Metalama
+      shell: pwsh
+      run: ./Build.ps1 dependencies set BuildServer Metalama --branch ${{ github.ref_name }} --nologo --no-progress
+
+    # Downloads Metalama and, transitively, Metalama.Compiler.
+    - name: Fetch dependencies
+      shell: pwsh
+      run: ./Build.ps1 dependencies fetch --nologo --no-progress
+
+    # Read back what the fetch actually resolved. The generated file is
+    # eng/Versions.<Config>[.ci].g.props and carries one LocalDependencySource per
+    # dependency, each with BuildNumber and CiBuildTypeId.
+    - name: Read resolved build numbers
+      id: resolve
+      shell: pwsh
+      run: |
+        $file = Get-ChildItem -Path eng -Filter 'Versions.*g.props' |
+          Where-Object { $_.Name -notlike 'Versions.g.props' } |
+          Select-Object -First 1
+        if (-not $file) { Write-Error 'No generated eng/Versions.*.g.props found.'; exit 1 }
+        Write-Host "Reading $($file.FullName)"
+        $xml = [xml](Get-Content $file.FullName -Raw)
+        $sources = $xml.Project.ItemGroup.LocalDependencySource |
+          Where-Object { $_.BuildNumber }
+        if (-not $sources) { Write-Error 'No build-server dependency was resolved.'; exit 1 }
+        foreach ($s in $sources) { Write-Host "  $($s.Include) #$($s.BuildNumber) ($($s.CiBuildTypeId))" }
+        $metalama = $sources | Where-Object { $_.Include -eq 'Metalama' } | Select-Object -First 1
+        if (-not $metalama) { Write-Error 'The Metalama dependency was not resolved.'; exit 1 }
+        # Identity of the whole dependency set, so a change in ANY resolved build
+        # (including transitive ones such as Metalama.Compiler) busts the cache.
+        $depsId = (($sources | Sort-Object Include |
+          ForEach-Object { "$($_.Include)-$($_.CiBuildTypeId)-$($_.BuildNumber)" }) -join '_')
+        "build-number=$($metalama.BuildNumber)" >> $env:GITHUB_OUTPUT
+        "build-type-id=$($metalama.CiBuildTypeId)" >> $env:GITHUB_OUTPUT
+        "deps-id=$depsId" >> $env:GITHUB_OUTPUT
+        Write-Host "deps-id=$depsId"
+
+    # Saves the Linux/x64 copy; the seed-dependencies job covers the other platforms.
+    - name: Save dependencies to cache
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.build-artifacts
+        key: deps-${{ env.CacheKeyPrefix }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.resolve.outputs.deps-id }}
+
+  # One download per runner platform, for the platforms resolve-dependencies does
+  # not itself cover. The artifacts are plain NuGet packages and therefore
+  # platform-neutral, but actions/cache round-trips are only reliably safe within
+  # one OS family, so the cache is keyed per (os, arch) rather than shared.
+  seed-dependencies:
+    needs: resolve-dependencies
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      IS_POSTSHARP_OWNED: true
+      TEAMCITY_CLOUD_TOKEN: ${{ secrets.TEAMCITY_CLOUD_TOKEN }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install .NET For Engineering
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: 9.0.3xx # Keep in sync with eng/src/global.json.
+
+    - name: Pin the artifact cache location
+      if: runner.os != 'Windows'
+      run: echo "USERPROFILE=$HOME" >> $GITHUB_ENV
+
+    # A hit means a previous run already downloaded this exact dependency set for
+    # this platform, and no TeamCity download is needed at all.
+    - name: Restore dependencies from cache
+      id: cache-deps
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.build-artifacts
+        key: deps-${{ env.CacheKeyPrefix }}-${{ runner.os }}-${{ runner.arch }}-${{ needs.resolve-dependencies.outputs.deps-id }}
+
+    # Pin to the build resolved by resolve-dependencies rather than re-resolving
+    # the branch, so every platform seeds the same Metalama build.
+    - name: Configure the dependency to Metalama
+      if: steps.cache-deps.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: ./Build.ps1 dependencies set BuildServer Metalama --buildNumber ${{ needs.resolve-dependencies.outputs.build-number }} --buildTypeId ${{ needs.resolve-dependencies.outputs.build-type-id }} --nologo --no-progress
+
+    - name: Fetch dependencies
+      if: steps.cache-deps.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: ./Build.ps1 dependencies fetch --nologo --no-progress
+
+    - name: Save dependencies to cache
+      if: steps.cache-deps.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.build-artifacts
+        key: deps-${{ env.CacheKeyPrefix }}-${{ runner.os }}-${{ runner.arch }}-${{ needs.resolve-dependencies.outputs.deps-id }}
+
   build:
+    needs: [resolve-dependencies, seed-dependencies]
+    # resolve-dependencies is required -- it supplies the pinned build number.
+    # seed-dependencies is best-effort: a platform that failed to seed just means
+    # a cache miss, and a cache miss falls back to downloading from TeamCity. A
+    # seeding failure must not skip the whole matrix.
+    if: ${{ !cancelled() && needs.resolve-dependencies.result == 'success' }}
 
     strategy:
       matrix:
@@ -267,12 +440,19 @@ jobs:
       TEAMCITY_CLOUD_TOKEN: ${{ secrets.TEAMCITY_CLOUD_TOKEN }}
       ConsoleAnsi: ${{ (matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15') && 'No' || 'Detect' }} # https://github.com/orgs/community/discussions/136868
       MetalamaAssemblyLocatorHooksDirectory: '../..'
-      CacheKeyPrefix: '2026.1-1' # Increase this value to invalidate the cache.
+      # CacheKeyPrefix is defined at workflow level so the seeding jobs share it.
 
     steps:
 
     - name: Checkout
       uses: actions/checkout@v4
+
+    # Must agree with the path the dependency cache is restored to (~/.build-artifacts).
+    # PostSharp.Engineering reads USERPROFILE, which does not exist on Unix, and
+    # falls back to a temp path that is not stable on macOS. See the seeding jobs.
+    - name: Pin the artifact cache location
+      if: runner.os != 'Windows'
+      run: echo "USERPROFILE=$HOME" >> $GITHUB_ENV
 
     # Determine the latest .NET SDK version from GitHub API because the dotnet-install.ps1 script does not
     # always resolve to the latest version, e.g. when the "full version" has suffix, like in `10.0.100-rc.1.25451.107`.
@@ -429,10 +609,35 @@ jobs:
         echo "DOTNET_CLEANED_VERSION=$cleanedVersion" >> $env:GITHUB_ENV
         echo "Cleaned version: $cleanedVersion"
 
+    # See the dependency-seeding jobs at the top of this file. The artifacts were
+    # already downloaded once per platform, so this restore replaces a TeamCity
+    # download over the company uplink with a GitHub-local one. The `.completed`
+    # sentinel inside the restored tree is what makes PostSharp.Engineering skip
+    # the download in the `prepare` step below.
+    #
+    # A miss is not fatal: `prepare` then falls back to downloading from TeamCity,
+    # which is the pre-existing behaviour, just slow.
+    - name: Restore dependencies from cache
+      id: cache-deps
+      if: steps.cache-build.outputs.cache-hit != 'true'
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.build-artifacts
+        key: deps-${{ env.CacheKeyPrefix }}-${{ runner.os }}-${{ runner.arch }}-${{ needs.resolve-dependencies.outputs.deps-id }}
+
+    - name: Warn on dependency cache miss
+      if: steps.cache-build.outputs.cache-hit != 'true' && steps.cache-deps.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: Write-Host "::warning::Dependency cache miss - this job will download the Metalama artifacts from TeamCity over the company uplink."
+
+    # Pin to the build resolved once by resolve-dependencies instead of
+    # re-resolving the branch here. This both matches the cache and guarantees the
+    # whole matrix tests one single Metalama build: re-resolving per job means a
+    # Metalama build finishing mid-run would split the matrix across two versions.
     - name: Configure the dependency to Metalama
       shell: pwsh
       if: steps.cache-build.outputs.cache-hit != 'true'
-      run: ./Build.ps1 dependencies set BuildServer Metalama --branch ${{github.ref_name}} --nologo --no-progress
+      run: ./Build.ps1 dependencies set BuildServer Metalama --buildNumber ${{ needs.resolve-dependencies.outputs.build-number }} --buildTypeId ${{ needs.resolve-dependencies.outputs.build-type-id }} --nologo --no-progress
 
     - name: Install Java
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && steps.cache-build.outputs.cache-hit != 'true'

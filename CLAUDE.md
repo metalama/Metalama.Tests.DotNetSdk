@@ -119,6 +119,56 @@ Set-Location (Join-Path $PSScriptRoot $EngPath "src")
 - GitHub API returns max 100 jobs per page - use pagination for large matrices
 - when testing a new workflow, comment out the old test matrix, and only select the failing configurations. After success, restore the full matrix
 
+## Dependency seeding (keeping TeamCity artifacts off the company uplink)
+
+The Metalama artifacts come from a self-hosted TeamCity on a LAN with limited
+upstream bandwidth. Without seeding, every matrix job downloads them — 230 pulls
+of the same payload per full run.
+
+The workflow has three layers:
+
+1. **`resolve-dependencies`** — resolves "latest Metalama build on this branch"
+   **once**, downloads it, and publishes `build-number`, `build-type-id` and
+   `deps-id` as job outputs.
+2. **`seed-dependencies`** — one job per remaining runner platform; downloads the
+   *pinned* build and saves it to the Actions cache.
+3. **`build`** — restores from that cache instead of downloading.
+
+Why this works with **no PostSharp.Engineering changes**:
+
+- `DependenciesHelper.DownloadBuild` writes a `.completed` sentinel next to the
+  artifacts and **skips the download entirely when it exists**, so a
+  cache-restored tree is reused verbatim.
+- The absolute paths baked into `nuget.config` and `eng/Versions.*.g.props` do
+  not need to survive the cache — every job regenerates them locally in
+  `Build.ps1 prepare`. Only the artifacts themselves must be restored.
+
+Two things to know:
+
+- **`USERPROFILE` must be pinned on Unix.** The cache location is
+  `Environment.GetEnvironmentVariable("USERPROFILE") ?? Path.GetTempPath()`
+  (`DependenciesHelper.cs:584`). `USERPROFILE` never exists on Linux/macOS, and
+  on macOS the fallback is a volatile per-session `/var/folders/...` path that
+  cannot be cached. Every job that touches `~/.build-artifacts` therefore sets
+  `USERPROFILE=$HOME` on non-Windows. If this is ever fixed properly in
+  PostSharp.Engineering, `DependenciesHelper.cs:584` is a single isolated choke
+  point — no other code reads that path.
+- **The build number is pinned, not re-resolved.** Jobs use
+  `dependencies set BuildServer Metalama --buildNumber N --buildTypeId T`. Beyond
+  matching the cache key, this fixes a real hazard: when each job resolved the
+  branch independently, a Metalama build completing mid-run silently split the
+  matrix across two different Metalama versions.
+
+Cache lifetime is GitHub's own — entries unused for 7 days are evicted and the
+repo-wide 10 GB budget is reclaimed LRU. **There is no per-entry TTL to set**;
+one week is already the platform behaviour. If the artifacts turn out to exceed
+the 10 GB budget, move to Release assets or external TeamCity artifact storage
+(S3/Azure Blob/R2) instead.
+
+Seeding is **best-effort**: `build` runs even if a seed job fails, because a
+cache miss degrades to the old TeamCity download rather than breaking the run.
+A miss emits a `::warning::` so it is visible in the run summary.
+
 ## x86 SDK testing
 
 The `setup-dotnet-x86` value of the `sdk-source` matrix axis tests the 32-bit
