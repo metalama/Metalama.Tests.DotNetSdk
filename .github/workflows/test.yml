@@ -101,7 +101,7 @@ env:
   # ═══════════════════════════════════════════════════════════════════════════
 
   # Workflow-level so the dependency-seeding job can key its cache on it too.
-  CacheKeyPrefix: '2026.1-1' # Increase this value to invalidate the cache.
+  CacheKeyPrefix: '2026.1-2' # Increase this value to invalidate the cache.
 
 jobs:
 
@@ -186,6 +186,10 @@ jobs:
       uses: actions/cache/restore@v4
       with:
         path: ~/.build-artifacts
+        # Windows refuses cache entries written on another platform unless this
+        # is set (actions/cache default is false). Without it the Windows jobs
+        # miss the Linux-written entry and fall back to a TeamCity download.
+        enableCrossOsArchive: true
         key: deps-${{ env.CacheKeyPrefix }}-unresolved
         restore-keys: |
           deps-${{ env.CacheKeyPrefix }}-
@@ -233,6 +237,10 @@ jobs:
       continue-on-error: true
       with:
         path: ~/.build-artifacts
+        # Windows refuses cache entries written on another platform unless this
+        # is set (actions/cache default is false). Without it the Windows jobs
+        # miss the Linux-written entry and fall back to a TeamCity download.
+        enableCrossOsArchive: true
         key: deps-${{ env.CacheKeyPrefix }}-${{ steps.resolve.outputs.deps-id }}
 
   build:
@@ -585,6 +593,10 @@ jobs:
       uses: actions/cache/restore@v4
       with:
         path: ~/.build-artifacts
+        # Windows refuses cache entries written on another platform unless this
+        # is set (actions/cache default is false). Without it the Windows jobs
+        # miss the Linux-written entry and fall back to a TeamCity download.
+        enableCrossOsArchive: true
         key: deps-${{ env.CacheKeyPrefix }}-${{ needs.resolve-dependencies.outputs.deps-id }}
 
     - name: Warn on dependency cache miss
