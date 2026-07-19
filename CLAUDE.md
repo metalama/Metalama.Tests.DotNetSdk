@@ -150,9 +150,21 @@ a `::warning::`, which is easy to miss:
    `D:\a\<repo>` rather than `C:\Users\runneradmin`, and nothing reads it.
 
 Hence the staging directory: jobs cache `.deps-cache` and copy to/from
-`$USERPROFILE/.build-artifacts` around it. **Verify a change here by grepping a
-Windows job log** for `Downloading` (must be 0) and `was already downloaded`
-(must be 2) — a green run proves nothing on its own.
+`$USERPROFILE/.build-artifacts` around it.
+
+**The `build` jobs pass `--cached-only`** (PostSharp.Engineering >= 2023.2.400), so
+a cache miss *fails the job* instead of silently downloading from TeamCity. This is
+deliberate — the silent fallback hid a real bug twice: the run went green while
+every Windows job pulled over the uplink. Build numbers are still resolved against
+TeamCity; only the artifact download is forbidden. `resolve-dependencies` must
+**never** get this flag: it is the job that populates the cache.
+
+The trade-off is that a cache miss is now fatal rather than slow. If GitHub evicts
+the entry mid-run, matrix jobs fail. Remove the flag to get the old degrade-to-slow
+behaviour back.
+
+**Verify a change here by grepping a Windows job log** for `Downloading` (must be 0)
+and `was already downloaded` (must be 2) — a green run proves nothing on its own.
 
 Why this works with **no PostSharp.Engineering changes**:
 

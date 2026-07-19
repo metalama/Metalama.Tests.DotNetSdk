@@ -654,16 +654,25 @@ jobs:
     - name: Warn on dependency cache miss
       if: steps.cache-build.outputs.cache-hit != 'true' && steps.cache-deps.outputs.cache-hit != 'true'
       shell: pwsh
-      run: Write-Host "::warning::Dependency cache miss - this job will download the Metalama artifacts from TeamCity over the company uplink."
+      run: Write-Host "::warning::Dependency cache miss - the --cached-only step below will fail rather than download from TeamCity."
 
     # Pin to the build resolved once by resolve-dependencies instead of
     # re-resolving the branch here. This both matches the cache and guarantees the
     # whole matrix tests one single Metalama build: re-resolving per job means a
     # Metalama build finishing mid-run would split the matrix across two versions.
+    #
+    # --cached-only (PostSharp.Engineering >= 2023.2.400) makes this step FAIL if the
+    # artifacts are not already in the local cache, instead of quietly downloading
+    # them. That is deliberate: these jobs are only reachable after
+    # resolve-dependencies seeded the cache, so a miss means the seeding is broken,
+    # and the silent fallback hid exactly that bug twice -- the run went green while
+    # every Windows job pulled from TeamCity. Better to fail loudly here.
+    # Build numbers are still resolved against TeamCity; only the artifact download
+    # is forbidden.
     - name: Configure the dependency to Metalama
       shell: pwsh
       if: steps.cache-build.outputs.cache-hit != 'true'
-      run: ./Build.ps1 dependencies set BuildServer Metalama --buildNumber ${{ needs.resolve-dependencies.outputs.build-number }} --buildTypeId ${{ needs.resolve-dependencies.outputs.build-type-id }} --nologo --no-progress
+      run: ./Build.ps1 dependencies set BuildServer Metalama --buildNumber ${{ needs.resolve-dependencies.outputs.build-number }} --buildTypeId ${{ needs.resolve-dependencies.outputs.build-type-id }} --cached-only --nologo --no-progress
 
     - name: Install Java
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && steps.cache-build.outputs.cache-hit != 'true'
