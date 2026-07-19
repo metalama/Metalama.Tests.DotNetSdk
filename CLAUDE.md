@@ -125,14 +125,19 @@ The Metalama artifacts come from a self-hosted TeamCity on a LAN with limited
 upstream bandwidth. Without seeding, every matrix job downloads them — 230 pulls
 of the same payload per full run.
 
-The workflow has three layers:
+The workflow has two layers:
 
 1. **`resolve-dependencies`** — resolves "latest Metalama build on this branch"
-   **once**, downloads it, and publishes `build-number`, `build-type-id` and
-   `deps-id` as job outputs.
-2. **`seed-dependencies`** — one job per remaining runner platform; downloads the
-   *pinned* build and saves it to the Actions cache.
-3. **`build`** — restores from that cache instead of downloading.
+   **once**, downloads it, saves it to the Actions cache, and publishes
+   `build-number`, `build-type-id` and `deps-id` as job outputs.
+2. **`build`** — restores from that cache instead of downloading.
+
+**One seeding job covers every platform.** The artifacts are plain NuGet packages —
+no symlinks, no executable bits, nothing platform-specific — so the cache key
+carries no `runner.os`/`runner.arch`, and `actions/cache` re-roots
+`~/.build-artifacts` on restore (`/home/runner`, `C:\Users\runneradmin`,
+`/Users/runner`). Do not re-introduce a per-platform seeding matrix: it downloads
+the identical payload N times for no benefit.
 
 Why this works with **no PostSharp.Engineering changes**:
 

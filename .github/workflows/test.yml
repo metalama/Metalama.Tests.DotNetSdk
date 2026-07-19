@@ -100,7 +100,7 @@ env:
   MACOS_MAUI_XCODE_10_0: '26.3'
   # ═══════════════════════════════════════════════════════════════════════════
 
-  # Workflow-level so the dependency-seeding jobs can key their caches on it too.
+  # Workflow-level so the dependency-seeding job can key its cache on it too.
   CacheKeyPrefix: '2026.1-1' # Increase this value to invalidate the cache.
 
 jobs:
@@ -112,9 +112,16 @@ jobs:
   # limited upstream bandwidth. Left alone, every matrix job downloads them, so a
   # full run pulls the same payload a couple of hundred times over that link.
   #
-  # Instead, exactly one job per runner platform downloads them and stores them in
-  # the GitHub Actions cache; every matrix job restores from there. Two properties
-  # of PostSharp.Engineering make this work with no changes on its side:
+  # Instead, ONE job downloads them and stores them in the GitHub Actions cache;
+  # every matrix job restores from there.
+  #
+  # A single job suffices for every platform because the artifacts are plain NuGet
+  # packages -- no symlinks, no executable bits, nothing platform-specific -- so the
+  # cache key deliberately carries no runner.os/runner.arch. actions/cache re-roots
+  # `~/.build-artifacts` per platform on restore, so a cache saved on Linux restores
+  # correctly to C:\Users\runneradmin on Windows and /Users/runner on macOS.
+  #
+  # Two properties of PostSharp.Engineering make this work with no changes on its side:
   #
   #   1. DownloadBuild writes a `.completed` sentinel next to the artifacts and
   #      skips the download outright when it already exists, so a restored tree is
@@ -166,8 +173,8 @@ jobs:
       run: echo "USERPROFILE=$HOME" >> $GITHUB_ENV
 
     # This job cannot know the build number before resolving it, so it cannot ask
-    # for an exact cache key. Instead take the most recent entry for this platform
-    # via restore-keys (the exact key below is deliberately one that never hits).
+    # for an exact cache key. Instead take the most recent entry via restore-keys
+    # (the exact key below is deliberately one that never hits).
     #
     # This is safe regardless of what it restores, because the build number is
     # part of the artifact directory path and `.completed` is per build number:
@@ -179,9 +186,9 @@ jobs:
       uses: actions/cache/restore@v4
       with:
         path: ~/.build-artifacts
-        key: deps-${{ env.CacheKeyPrefix }}-${{ runner.os }}-${{ runner.arch }}-unresolved
+        key: deps-${{ env.CacheKeyPrefix }}-unresolved
         restore-keys: |
-          deps-${{ env.CacheKeyPrefix }}-${{ runner.os }}-${{ runner.arch }}-
+          deps-${{ env.CacheKeyPrefix }}-
 
     # `dependencies set` already resolves the branch and downloads the artifacts
     # (Metalama and, transitively, Metalama.Compiler) -- a separate
@@ -218,7 +225,7 @@ jobs:
         "deps-id=$depsId" >> $env:GITHUB_OUTPUT
         Write-Host "deps-id=$depsId"
 
-    # Saves the Linux/x64 copy; the seed-dependencies job covers the other platforms.
+    # One entry, consumed by every matrix job on every platform.
     - name: Save dependencies to cache
       uses: actions/cache/save@v4
       # On a warm run the entry for this exact dependency set already exists and
@@ -226,71 +233,10 @@ jobs:
       continue-on-error: true
       with:
         path: ~/.build-artifacts
-        key: deps-${{ env.CacheKeyPrefix }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.resolve.outputs.deps-id }}
-
-  # One download per runner platform, for the platforms resolve-dependencies does
-  # not itself cover. The artifacts are plain NuGet packages and therefore
-  # platform-neutral, but actions/cache round-trips are only reliably safe within
-  # one OS family, so the cache is keyed per (os, arch) rather than shared.
-  seed-dependencies:
-    needs: resolve-dependencies
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      IS_POSTSHARP_OWNED: true
-      TEAMCITY_CLOUD_TOKEN: ${{ secrets.TEAMCITY_CLOUD_TOKEN }}
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Install .NET For Engineering
-      uses: actions/setup-dotnet@v5
-      with:
-        dotnet-version: 9.0.3xx # Keep in sync with eng/src/global.json.
-
-    - name: Pin the artifact cache location
-      if: runner.os != 'Windows'
-      run: echo "USERPROFILE=$HOME" >> $GITHUB_ENV
-
-    # A hit means a previous run already downloaded this exact dependency set for
-    # this platform, and no TeamCity download is needed at all.
-    - name: Restore dependencies from cache
-      id: cache-deps
-      uses: actions/cache/restore@v4
-      with:
-        path: ~/.build-artifacts
-        key: deps-${{ env.CacheKeyPrefix }}-${{ runner.os }}-${{ runner.arch }}-${{ needs.resolve-dependencies.outputs.deps-id }}
-
-    # Pin to the build resolved by resolve-dependencies rather than re-resolving
-    # the branch, so every platform seeds the same Metalama build. `set` performs
-    # the download itself, so no separate `dependencies fetch` is needed.
-    - name: Configure the dependency to Metalama
-      if: steps.cache-deps.outputs.cache-hit != 'true'
-      shell: pwsh
-      run: ./Build.ps1 dependencies set BuildServer Metalama --buildNumber ${{ needs.resolve-dependencies.outputs.build-number }} --buildTypeId ${{ needs.resolve-dependencies.outputs.build-type-id }} --nologo --no-progress
-
-    - name: Save dependencies to cache
-      if: steps.cache-deps.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v4
-      continue-on-error: true
-      with:
-        path: ~/.build-artifacts
-        key: deps-${{ env.CacheKeyPrefix }}-${{ runner.os }}-${{ runner.arch }}-${{ needs.resolve-dependencies.outputs.deps-id }}
+        key: deps-${{ env.CacheKeyPrefix }}-${{ steps.resolve.outputs.deps-id }}
 
   build:
-    needs: [resolve-dependencies, seed-dependencies]
-    # resolve-dependencies is required -- it supplies the pinned build number.
-    # seed-dependencies is best-effort: a platform that failed to seed just means
-    # a cache miss, and a cache miss falls back to downloading from TeamCity. A
-    # seeding failure must not skip the whole matrix.
-    if: ${{ !cancelled() && needs.resolve-dependencies.result == 'success' }}
+    needs: resolve-dependencies
 
     strategy:
       matrix:
@@ -456,7 +402,7 @@ jobs:
       TEAMCITY_CLOUD_TOKEN: ${{ secrets.TEAMCITY_CLOUD_TOKEN }}
       ConsoleAnsi: ${{ (matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15') && 'No' || 'Detect' }} # https://github.com/orgs/community/discussions/136868
       MetalamaAssemblyLocatorHooksDirectory: '../..'
-      # CacheKeyPrefix is defined at workflow level so the seeding jobs share it.
+      # CacheKeyPrefix is defined at workflow level so the seeding job shares it.
 
     steps:
 
@@ -465,7 +411,7 @@ jobs:
 
     # Must agree with the path the dependency cache is restored to (~/.build-artifacts).
     # PostSharp.Engineering reads USERPROFILE, which does not exist on Unix, and
-    # falls back to a temp path that is not stable on macOS. See the seeding jobs.
+    # falls back to a temp path that is not stable on macOS. See resolve-dependencies.
     - name: Pin the artifact cache location
       if: runner.os != 'Windows'
       run: echo "USERPROFILE=$HOME" >> $GITHUB_ENV
@@ -625,8 +571,8 @@ jobs:
         echo "DOTNET_CLEANED_VERSION=$cleanedVersion" >> $env:GITHUB_ENV
         echo "Cleaned version: $cleanedVersion"
 
-    # See the dependency-seeding jobs at the top of this file. The artifacts were
-    # already downloaded once per platform, so this restore replaces a TeamCity
+    # See resolve-dependencies at the top of this file. The artifacts were already
+    # downloaded once for the whole run, so this restore replaces a TeamCity
     # download over the company uplink with a GitHub-local one. The `.completed`
     # sentinel inside the restored tree is what makes PostSharp.Engineering skip
     # the download in the `prepare` step below.
@@ -639,7 +585,7 @@ jobs:
       uses: actions/cache/restore@v4
       with:
         path: ~/.build-artifacts
-        key: deps-${{ env.CacheKeyPrefix }}-${{ runner.os }}-${{ runner.arch }}-${{ needs.resolve-dependencies.outputs.deps-id }}
+        key: deps-${{ env.CacheKeyPrefix }}-${{ needs.resolve-dependencies.outputs.deps-id }}
 
     - name: Warn on dependency cache miss
       if: steps.cache-build.outputs.cache-hit != 'true' && steps.cache-deps.outputs.cache-hit != 'true'
