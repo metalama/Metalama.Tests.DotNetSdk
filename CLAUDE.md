@@ -137,6 +137,45 @@ same path as the normal setup-dotnet jobs with no further special-casing.
 To exercise only these jobs, dispatch the workflow with
 `sdk-source: setup-dotnet-x86`.
 
+**MAUI is excluded from x86**: `dotnet workload install maui` fails with
+`Workload ID maui isn't supported on this platform` — Microsoft does not publish
+MAUI workloads for win-x86. This is not fixable; the excludes are permanent.
+
+## MSBuild.exe testing (the `build-tool` axis)
+
+`build-tool` selects what drives the build: the `dotnet` CLI (baseline) or the
+.NET Framework `MSBuild.exe` from Visual Studio. Both Windows runner images carry
+Visual Studio Enterprise 2022, so `msbuild-x64`/`msbuild-x86` run on
+`windows-latest` and `msbuild-arm64` on `windows-11-arm`. There is no
+`MSBuild.exe` on Linux or macOS, so the axis is excluded there entirely.
+
+MSBuild is located with `microsoft/setup-msbuild@v2`, which uses `vswhere`.
+**Never hardcode the Visual Studio path** — the edition and version on the runner
+image move.
+
+Two things that are easy to get wrong:
+
+1. **`msbuild-architecture` defaults to `x86`.** It maps to the host binary:
+   `x86` → `MSBuild\Current\Bin\MSBuild.exe` (32-bit), `x64` →
+   `Bin\amd64\MSBuild.exe`, `arm64` → `Bin\arm64\MSBuild.exe`. The VS docs saying
+   "VS 2022 uses the 64-bit MSBuild" describe what the IDE launches, *not* what
+   sits at `Bin\MSBuild.exe`. So `x64` must be requested explicitly, or you
+   silently test a 32-bit host.
+2. **`MSBuild.exe` does not restore implicitly**, unlike `dotnet build`. The
+   build step passes `-restore`; without it the build fails on a missing
+   `project.assets.json`.
+
+`MSBuild.exe` still needs a .NET SDK on PATH to build SDK-style projects (it
+honours `global.json`), so the `setup-dotnet` steps apply to these jobs too. This
+axis varies the *build host*, not the SDK.
+
+The axis is deliberately **not** fully crossed with `sdk-source`: MSBuild runs
+against the normal x64 SDK, and the x86 SDK runs under `dotnet build` only.
+Dropping the two `sdk-source: setup-dotnet-x86` / `build-tool: msbuild-*`
+excludes would add the missing cells, at the cost of a much larger matrix.
+
+To exercise only these jobs, dispatch with e.g. `build-tool: msbuild-x64`.
+
 ## Updating the macOS MAUI version pins
 
 `.github/workflows/test.yml` builds MAUI projects on macOS. The iOS and Mac

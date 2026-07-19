@@ -52,6 +52,17 @@ on:
           - setup-dotnet
           - setup-dotnet-x86
           - apt
+      build-tool:
+        description: 'Build tool (or "all" for full matrix)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - dotnet
+          - msbuild-x64
+          - msbuild-x86
+          - msbuild-arm64
 
 env:
   SUMMARY_ISSUE_NUMBER: 7  # Issue number for this branch
@@ -100,6 +111,15 @@ jobs:
         dotnet-version: ${{ inputs.dotnet-version != 'all' && inputs.dotnet-version != '' && fromJson(format('["{0}"]', inputs.dotnet-version)) || fromJson('["8.0", "9.0", "10.0"]') }}
         project-type: ${{ inputs.project-type != 'all' && inputs.project-type != '' && fromJson(format('["{0}"]', inputs.project-type)) || fromJson('["console", "maui", "maui-blazor", "mvc", "razor", "blazor", "blazorwasm", "winforms", "wpf"]') }}  # dotnet new list
         sdk-source: ${{ inputs.sdk-source != 'all' && inputs.sdk-source != '' && fromJson(format('["{0}"]', inputs.sdk-source)) || fromJson('["setup-dotnet", "setup-dotnet-x86", "apt"]') }}
+        # Which tool drives the build: the `dotnet` CLI, or the .NET Framework
+        # MSBuild.exe from Visual Studio (Windows only). The msbuild-* values pick
+        # the MSBuild HOST architecture, which is independent of the SDK
+        # architecture chosen by sdk-source. Note that Bin\MSBuild.exe is the
+        # 32-bit host and Bin\amd64\MSBuild.exe the 64-bit one, so msbuild-x64
+        # must be requested explicitly -- see the Set up MSBuild step.
+        # Keep this axis LAST: the generated job name lists matrix values in
+        # definition order, and the summary job's regex depends on that order.
+        build-tool: ${{ inputs.build-tool != 'all' && inputs.build-tool != '' && fromJson(format('["{0}"]', inputs.build-tool)) || fromJson('["dotnet", "msbuild-x64", "msbuild-x86", "msbuild-arm64"]') }}
         exclude:
           # WinForms and WPF are only available on Windows
           - project-type: winforms # N/A
@@ -149,6 +169,61 @@ jobs:
             os: windows-11-arm
           - sdk-source: setup-dotnet-x86
             os: macos-15
+
+          # MAUI workloads are not published for win-x86: `dotnet workload install
+          # maui` fails outright with "Workload ID maui isn't supported on this
+          # platform". MAUI stays covered by every other Windows combination.
+          - sdk-source: setup-dotnet-x86
+            project-type: maui
+          - sdk-source: setup-dotnet-x86
+            project-type: maui-blazor
+
+          # ── MSBuild.exe axis ─────────────────────────────────────────────────
+          # MSBuild.exe ships with Visual Studio, which exists only on the Windows
+          # runner images (windows-latest and windows-11-arm both carry VS 2022
+          # Enterprise). There is no MSBuild.exe on Linux or macOS.
+          - build-tool: msbuild-x64
+            os: ubuntu-24.04
+          - build-tool: msbuild-x64
+            os: ubuntu-22.04
+          - build-tool: msbuild-x64
+            os: ubuntu-24.04-arm
+          - build-tool: msbuild-x64
+            os: macos-15
+          - build-tool: msbuild-x86
+            os: ubuntu-24.04
+          - build-tool: msbuild-x86
+            os: ubuntu-22.04
+          - build-tool: msbuild-x86
+            os: ubuntu-24.04-arm
+          - build-tool: msbuild-x86
+            os: macos-15
+          - build-tool: msbuild-arm64
+            os: ubuntu-24.04
+          - build-tool: msbuild-arm64
+            os: ubuntu-22.04
+          - build-tool: msbuild-arm64
+            os: ubuntu-24.04-arm
+          - build-tool: msbuild-arm64
+            os: macos-15
+
+          # Each MSBuild host architecture belongs to the runner that can execute
+          # it natively: x64/x86 on the x64 runner, arm64 on the arm64 runner.
+          - build-tool: msbuild-arm64
+            os: windows-latest
+          - build-tool: msbuild-x64
+            os: windows-11-arm
+          - build-tool: msbuild-x86
+            os: windows-11-arm
+
+          # Keep the build-tool and sdk-source axes from multiplying out: MSBuild
+          # is exercised against the normal x64 SDK only, and the x86 SDK is
+          # exercised through `dotnet build` only. Dropping these two excludes
+          # would add the (x86 SDK x MSBuild) cells if that ever becomes interesting.
+          - sdk-source: setup-dotnet-x86
+            build-tool: msbuild-x64
+          - sdk-source: setup-dotnet-x86
+            build-tool: msbuild-x86
 
           # ubuntu-22.04 is only used for .NET 10.0 apt (dotnet10 package not available for 24.04)
           - os: ubuntu-22.04
@@ -283,7 +358,7 @@ jobs:
       with:
         path: |
           ./.build-cache
-        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ matrix.sdk-source }}-${{ steps.sdk-version.outputs.version }}-${{ matrix.project-type }}
+        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ matrix.sdk-source }}-${{ steps.sdk-version.outputs.version }}-${{ matrix.project-type }}-${{ matrix.build-tool }}
 
     # global.json must be present for setup-dotnet to work.
     - name: Create temporary global.json
@@ -498,10 +573,40 @@ jobs:
       if:  steps.cache-build.outputs.cache-hit != 'true'
       run: ./Build.ps1 create-project ${{ matrix.project-type }} --nologo
 
+    # Locate MSBuild.exe via vswhere and put it on PATH. Do NOT hardcode the
+    # Visual Studio path: the edition and version on the runner image move.
+    #
+    # msbuild-architecture selects the MSBuild HOST process architecture:
+    #   x86   -> MSBuild\Current\Bin\MSBuild.exe        (32-bit)
+    #   x64   -> MSBuild\Current\Bin\amd64\MSBuild.exe  (64-bit)
+    #   arm64 -> MSBuild\Current\Bin\arm64\MSBuild.exe
+    # The action's own default is x86, so x64 must be asked for explicitly --
+    # "VS 2022 is 64-bit" describes what the IDE launches, not what sits at
+    # Bin\MSBuild.exe. This is the MSBuild host only; the SDK architecture is a
+    # separate matter, chosen by sdk-source.
+    - name: Set up MSBuild
+      uses: microsoft/setup-msbuild@v2
+      if: startsWith(matrix.build-tool, 'msbuild') && steps.cache-build.outputs.cache-hit != 'true'
+      with:
+        msbuild-architecture: ${{ matrix.build-tool == 'msbuild-x64' && 'x64' || matrix.build-tool == 'msbuild-arm64' && 'arm64' || 'x86' }}
+
     - name: Build
       shell: pwsh
       if:  steps.cache-build.outputs.cache-hit != 'true'
-      run:  cd src/Metalama.Tests.DotNetSdk && dotnet build -p:WarningsAsErrors=CS8785
+      run: |
+        cd src/Metalama.Tests.DotNetSdk
+        if ('${{ matrix.build-tool }}' -eq 'dotnet') {
+          dotnet build -p:WarningsAsErrors=CS8785
+        } else {
+          # MSBuild.exe is a .NET Framework host and, unlike `dotnet build`, does
+          # not restore implicitly -- without -restore the build fails on missing
+          # project.assets.json. It still needs a .NET SDK on PATH to build
+          # SDK-style projects, which the setup-dotnet steps above provide (and
+          # global.json pins), so this exercises a different build host over the
+          # same SDK rather than a different SDK.
+          msbuild -restore -p:WarningsAsErrors=CS8785
+        }
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Verify Transformations
       shell: pwsh
@@ -519,7 +624,7 @@ jobs:
       uses: actions/cache/save@v4
       with:
         path: ./.build-cache
-        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ matrix.sdk-source }}-${{ steps.sdk-version.outputs.version }}-${{ matrix.project-type }}
+        key: build-${{ env.CacheKeyPrefix }}-${{ matrix.os }}-${{ matrix.sdk-source }}-${{ steps.sdk-version.outputs.version }}-${{ matrix.project-type }}-${{ matrix.build-tool }}
 
   # Generate test summary after all tests complete
   generate-summary:
@@ -571,12 +676,12 @@ jobs:
           console.log(`Fetched ${allJobs.length} jobs across ${page} page(s)`);
           
           // Parse matrix jobs (skip the summary job itself)
-          // Job name format: build (os, dotnet-version, project-type, sdk-source)
+          // Job name format: build (os, dotnet-version, project-type, sdk-source, build-tool)
           // Note: Order matches matrix definition order in YAML
           const results = allJobs
             .filter(job => job.name.startsWith('build ('))
             .map(job => {
-              const match = job.name.match(/build \(([^,]+), ([^,]+), ([^,]+), ([^)]+)\)/);
+              const match = job.name.match(/build \(([^,]+), ([^,]+), ([^,]+), ([^,]+), ([^)]+)\)/);
               if (match) {
                 // Extract exact version from job steps
                 let exactVersion = match[2]; // Default to matrix version
@@ -595,6 +700,7 @@ jobs:
 
                 const projectType = match[3];
                 const sdkSource = match[4];
+                const buildTool = match[5];
                 // Create composite OS identifier that includes sdk-source for apt
                 const osDisplay = sdkSource === 'apt' ? `${match[1]} (apt)` : match[1];
 
@@ -604,6 +710,11 @@ jobs:
                   dotnetVersion: match[2],
                   projectType: projectType,
                   sdkSource: sdkSource,
+                  buildTool: buildTool,
+                  // One table per (sdk-source, build-tool) pair. `dotnet` is the
+                  // baseline build tool, so it is left implicit to keep the
+                  // pre-existing headings unchanged.
+                  variant: buildTool === 'dotnet' ? sdkSource : `${sdkSource} + ${buildTool}`,
                   exactVersion: exactVersion,
                   status: job.conclusion,
                   url: job.html_url
@@ -620,7 +731,7 @@ jobs:
           const failedJobs = results.filter(r => r.status === 'failure').length;
           const cancelledJobs = results.filter(r => r.status === 'cancelled').length;
           
-          // Group results by .NET version -> sdk-source -> project-type -> os
+          // Group results by .NET version -> variant (sdk-source + build-tool) -> project-type -> os
           const versionGroups = {};
           const exactVersionCounts = {};
 
@@ -628,19 +739,19 @@ jobs:
             if (!versionGroups[result.dotnetVersion]) {
               versionGroups[result.dotnetVersion] = {};
             }
-            if (!versionGroups[result.dotnetVersion][result.sdkSource]) {
-              versionGroups[result.dotnetVersion][result.sdkSource] = {};
+            if (!versionGroups[result.dotnetVersion][result.variant]) {
+              versionGroups[result.dotnetVersion][result.variant] = {};
             }
-            if (!versionGroups[result.dotnetVersion][result.sdkSource][result.projectType]) {
-              versionGroups[result.dotnetVersion][result.sdkSource][result.projectType] = {};
+            if (!versionGroups[result.dotnetVersion][result.variant][result.projectType]) {
+              versionGroups[result.dotnetVersion][result.variant][result.projectType] = {};
             }
-            versionGroups[result.dotnetVersion][result.sdkSource][result.projectType][result.os] = result;
+            versionGroups[result.dotnetVersion][result.variant][result.projectType][result.os] = result;
 
-            // Tally exact SDK versions per .NET band + sdk-source. Most cells use
+            // Tally exact SDK versions per .NET band + variant. Most cells use
             // the latest SDK; some (e.g. macOS MAUI) are pinned to an older one, so
             // the headline is the most common version and deviating cells are annotated.
             if (result.exactVersion) {
-              const exactKey = `${result.dotnetVersion}-${result.sdkSource}`;
+              const exactKey = `${result.dotnetVersion}-${result.variant}`;
               if (!exactVersionCounts[exactKey]) {
                 exactVersionCounts[exactKey] = {};
               }
@@ -649,7 +760,7 @@ jobs:
             }
           });
 
-          // Pick the most common exact version per .NET band + sdk-source as the headline.
+          // Pick the most common exact version per .NET band + variant as the headline.
           const exactVersions = {};
           Object.keys(exactVersionCounts).forEach(exactKey => {
             const counts = exactVersionCounts[exactKey];
@@ -659,7 +770,22 @@ jobs:
 
           // Get unique values for rendering
           const allProjectTypes = [...new Set(results.map(r => r.projectType))].sort();
-          const sdkSources = ['setup-dotnet', 'setup-dotnet-x86', 'apt']; // Fixed order
+          // One table per (sdk-source, build-tool) variant, ordered by sdk-source
+          // first and build tool second, so the baseline `dotnet` tables keep
+          // their historical position at the top. Derived from the results rather
+          // than hardcoded, so a new matrix value shows up without editing this.
+          const SDK_ORDER = ['setup-dotnet', 'setup-dotnet-x86', 'apt'];
+          const TOOL_ORDER = ['dotnet', 'msbuild-x64', 'msbuild-x86', 'msbuild-arm64'];
+          const rank = (list, value) => {
+            const i = list.indexOf(value);
+            return i === -1 ? list.length : i; // unknown values sort last
+          };
+          const variantMeta = {};
+          results.forEach(r => { variantMeta[r.variant] = r; });
+          const sdkSources = Object.keys(variantMeta).sort((a, b) =>
+            rank(SDK_ORDER, variantMeta[a].sdkSource) - rank(SDK_ORDER, variantMeta[b].sdkSource) ||
+            rank(TOOL_ORDER, variantMeta[a].buildTool) - rank(TOOL_ORDER, variantMeta[b].buildTool) ||
+            a.localeCompare(b));
           
           // Generate markdown summary
           let markdown = `# 🧪 Platform Integration Tests Summary - ${branch}\n\n`;
