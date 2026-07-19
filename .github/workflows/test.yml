@@ -165,6 +165,24 @@ jobs:
       if: runner.os != 'Windows'
       run: echo "USERPROFILE=$HOME" >> $GITHUB_ENV
 
+    # This job cannot know the build number before resolving it, so it cannot ask
+    # for an exact cache key. Instead take the most recent entry for this platform
+    # via restore-keys (the exact key below is deliberately one that never hits).
+    #
+    # This is safe regardless of what it restores, because the build number is
+    # part of the artifact directory path and `.completed` is per build number:
+    # if the branch still points at the restored build, the fetch below finds the
+    # sentinel and downloads nothing; if a newer build exists, its directory is
+    # simply absent and only that one is downloaded. So an unchanged Metalama
+    # means a run that touches the company uplink not at all.
+    - name: Restore previously seeded dependencies
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.build-artifacts
+        key: deps-${{ env.CacheKeyPrefix }}-${{ runner.os }}-${{ runner.arch }}-unresolved
+        restore-keys: |
+          deps-${{ env.CacheKeyPrefix }}-${{ runner.os }}-${{ runner.arch }}-
+
     - name: Configure the dependency to Metalama
       shell: pwsh
       run: ./Build.ps1 dependencies set BuildServer Metalama --branch ${{ github.ref_name }} --nologo --no-progress
@@ -205,6 +223,9 @@ jobs:
     # Saves the Linux/x64 copy; the seed-dependencies job covers the other platforms.
     - name: Save dependencies to cache
       uses: actions/cache/save@v4
+      # On a warm run the entry for this exact dependency set already exists and
+      # the save is a no-op that reports failure. That is expected, not an error.
+      continue-on-error: true
       with:
         path: ~/.build-artifacts
         key: deps-${{ env.CacheKeyPrefix }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.resolve.outputs.deps-id }}
@@ -264,6 +285,7 @@ jobs:
     - name: Save dependencies to cache
       if: steps.cache-deps.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
+      continue-on-error: true
       with:
         path: ~/.build-artifacts
         key: deps-${{ env.CacheKeyPrefix }}-${{ runner.os }}-${{ runner.arch }}-${{ needs.resolve-dependencies.outputs.deps-id }}
