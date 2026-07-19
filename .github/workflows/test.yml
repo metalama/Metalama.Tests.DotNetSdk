@@ -183,16 +183,14 @@ jobs:
         restore-keys: |
           deps-${{ env.CacheKeyPrefix }}-${{ runner.os }}-${{ runner.arch }}-
 
+    # `dependencies set` already resolves the branch and downloads the artifacts
+    # (Metalama and, transitively, Metalama.Compiler) -- a separate
+    # `dependencies fetch` would be redundant.
     - name: Configure the dependency to Metalama
       shell: pwsh
       run: ./Build.ps1 dependencies set BuildServer Metalama --branch ${{ github.ref_name }} --nologo --no-progress
 
-    # Downloads Metalama and, transitively, Metalama.Compiler.
-    - name: Fetch dependencies
-      shell: pwsh
-      run: ./Build.ps1 dependencies fetch --nologo --no-progress
-
-    # Read back what the fetch actually resolved. The generated file is
+    # Read back what the download actually resolved. The generated file is
     # eng/Versions.<Config>[.ci].g.props and carries one LocalDependencySource per
     # dependency, each with BuildNumber and CiBuildTypeId.
     - name: Read resolved build numbers
@@ -271,16 +269,12 @@ jobs:
         key: deps-${{ env.CacheKeyPrefix }}-${{ runner.os }}-${{ runner.arch }}-${{ needs.resolve-dependencies.outputs.deps-id }}
 
     # Pin to the build resolved by resolve-dependencies rather than re-resolving
-    # the branch, so every platform seeds the same Metalama build.
+    # the branch, so every platform seeds the same Metalama build. `set` performs
+    # the download itself, so no separate `dependencies fetch` is needed.
     - name: Configure the dependency to Metalama
       if: steps.cache-deps.outputs.cache-hit != 'true'
       shell: pwsh
       run: ./Build.ps1 dependencies set BuildServer Metalama --buildNumber ${{ needs.resolve-dependencies.outputs.build-number }} --buildTypeId ${{ needs.resolve-dependencies.outputs.build-type-id }} --nologo --no-progress
-
-    - name: Fetch dependencies
-      if: steps.cache-deps.outputs.cache-hit != 'true'
-      shell: pwsh
-      run: ./Build.ps1 dependencies fetch --nologo --no-progress
 
     - name: Save dependencies to cache
       if: steps.cache-deps.outputs.cache-hit != 'true'
