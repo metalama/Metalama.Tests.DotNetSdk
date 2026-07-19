@@ -50,6 +50,7 @@ on:
         options:
           - all
           - setup-dotnet
+          - setup-dotnet-x86
           - apt
 
 env:
@@ -98,7 +99,7 @@ jobs:
         os: ${{ inputs.os != 'all' && inputs.os != '' && fromJson(format('["{0}"]', inputs.os)) || fromJson('["ubuntu-24.04", "ubuntu-22.04", "ubuntu-24.04-arm", "windows-latest", "windows-11-arm", "macos-15"]') }}
         dotnet-version: ${{ inputs.dotnet-version != 'all' && inputs.dotnet-version != '' && fromJson(format('["{0}"]', inputs.dotnet-version)) || fromJson('["8.0", "9.0", "10.0"]') }}
         project-type: ${{ inputs.project-type != 'all' && inputs.project-type != '' && fromJson(format('["{0}"]', inputs.project-type)) || fromJson('["console", "maui", "maui-blazor", "mvc", "razor", "blazor", "blazorwasm", "winforms", "wpf"]') }}  # dotnet new list
-        sdk-source: ${{ inputs.sdk-source != 'all' && inputs.sdk-source != '' && fromJson(format('["{0}"]', inputs.sdk-source)) || fromJson('["setup-dotnet", "apt"]') }}
+        sdk-source: ${{ inputs.sdk-source != 'all' && inputs.sdk-source != '' && fromJson(format('["{0}"]', inputs.sdk-source)) || fromJson('["setup-dotnet", "setup-dotnet-x86", "apt"]') }}
         exclude:
           # WinForms and WPF are only available on Windows
           - project-type: winforms # N/A
@@ -134,6 +135,19 @@ jobs:
           - sdk-source: apt
             os: windows-11-arm
           - sdk-source: apt
+            os: macos-15
+
+          # The x86 SDK is Windows-only, and only makes sense on an x64 host:
+          # windows-11-arm has no x86 .NET SDK, and Linux/macOS ship none at all.
+          - sdk-source: setup-dotnet-x86
+            os: ubuntu-24.04
+          - sdk-source: setup-dotnet-x86
+            os: ubuntu-22.04
+          - sdk-source: setup-dotnet-x86
+            os: ubuntu-24.04-arm
+          - sdk-source: setup-dotnet-x86
+            os: windows-11-arm
+          - sdk-source: setup-dotnet-x86
             os: macos-15
 
           # ubuntu-22.04 is only used for .NET 10.0 apt (dotnet10 package not available for 24.04)
@@ -290,6 +304,10 @@ jobs:
       if: matrix.sdk-source != 'apt' && steps.cache-build.outputs.cache-hit != 'true'
       with:
         dotnet-version: ${{ steps.get-exact-version.outputs.exact-version }}
+        # An empty value means "the runner's own architecture". For x86, setup-dotnet
+        # installs into a dedicated <PROGRAMFILES>\dotnet\x86 root and points
+        # DOTNET_ROOT/PATH at it, so the x86 and x64 SDKs never share a root.
+        architecture: ${{ matrix.sdk-source == 'setup-dotnet-x86' && 'x86' || '' }}
 
     - name: Checkout
       uses: actions/checkout@v4
@@ -300,16 +318,19 @@ jobs:
     # A dotnet host resolves SDKs only from its own install root (there is no
     # multilevel lookup on Linux), so the engineering SDK and the test SDK must
     # live in the SAME root or one of them is invisible. For non-apt jobs both
-    # come from setup-dotnet, which always installs into /usr/share/dotnet, so a
-    # single setup-dotnet step is enough. For apt jobs the test SDK is in apt's
+    # come from setup-dotnet, which installs into a single per-architecture root,
+    # so a single setup-dotnet step is enough -- but the `architecture` input must
+    # match the step above, otherwise the engineering SDK lands in the x64 root
+    # while the test SDK is in the x86 one. For apt jobs the test SDK is in apt's
     # root (/usr/lib/dotnet), so the engineering SDK is installed there too --
     # see the apt-specific step below.
     - name: Install .NET For Engineering
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v5
       id: setup-dotnet-eng
       if: matrix.sdk-source != 'apt' && steps.cache-build.outputs.cache-hit != 'true'
       with:
         dotnet-version: 9.0.3xx # Keep in sync with eng\src\global.json.
+        architecture: ${{ matrix.sdk-source == 'setup-dotnet-x86' && 'x86' || '' }}
 
     # apt jobs: install the engineering SDK into apt's dotnet root so that one
     # dotnet host sees both the apt-provided test SDK and the engineering SDK.
@@ -638,7 +659,7 @@ jobs:
 
           // Get unique values for rendering
           const allProjectTypes = [...new Set(results.map(r => r.projectType))].sort();
-          const sdkSources = ['setup-dotnet', 'apt']; // Fixed order
+          const sdkSources = ['setup-dotnet', 'setup-dotnet-x86', 'apt']; // Fixed order
           
           // Generate markdown summary
           let markdown = `# 🧪 Platform Integration Tests Summary - ${branch}\n\n`;

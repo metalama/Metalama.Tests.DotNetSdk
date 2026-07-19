@@ -119,6 +119,24 @@ Set-Location (Join-Path $PSScriptRoot $EngPath "src")
 - GitHub API returns max 100 jobs per page - use pagination for large matrices
 - when testing a new workflow, comment out the old test matrix, and only select the failing configurations. After success, restore the full matrix
 
+## x86 SDK testing
+
+The `setup-dotnet-x86` value of the `sdk-source` matrix axis tests the 32-bit
+Windows .NET SDK. It is Windows-x64-host only (`windows-latest`): there is no
+x86 SDK for `windows-11-arm`, and none at all for Linux/macOS.
+
+It works by passing `architecture: x86` to `actions/setup-dotnet@v5`, which
+installs into a dedicated `<PROGRAMFILES>\dotnet\x86` root and points
+`DOTNET_ROOT`/`PATH` there. **Both** setup-dotnet steps (test SDK and
+engineering SDK) must get the same `architecture` value — a dotnet host only
+sees SDKs in its own root, so a mismatch makes one of the two invisible.
+
+Every other step keys off `matrix.sdk-source != 'apt'`, so x86 jobs follow the
+same path as the normal setup-dotnet jobs with no further special-casing.
+
+To exercise only these jobs, dispatch the workflow with
+`sdk-source: setup-dotnet-x86`.
+
 ## Updating the macOS MAUI version pins
 
 `.github/workflows/test.yml` builds MAUI projects on macOS. The iOS and Mac
