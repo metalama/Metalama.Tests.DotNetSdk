@@ -134,10 +134,25 @@ The workflow has two layers:
 
 **One seeding job covers every platform.** The artifacts are plain NuGet packages —
 no symlinks, no executable bits, nothing platform-specific — so the cache key
-carries no `runner.os`/`runner.arch`, and `actions/cache` re-roots
-`~/.build-artifacts` on restore (`/home/runner`, `C:\Users\runneradmin`,
-`/Users/runner`). Do not re-introduce a per-platform seeding matrix: it downloads
-the identical payload N times for no benefit.
+carries no `runner.os`/`runner.arch`. Do not re-introduce a per-platform seeding
+matrix: it downloads the identical payload N times for no benefit.
+
+**Sharing one cache entry across OSes needs two things, and both fail silently.**
+A job that gets this wrong still passes — it just downloads from TeamCity and emits
+a `::warning::`, which is easy to miss:
+
+1. **`enableCrossOsArchive: true`** on every restore/save. Windows rejects entries
+   written on another platform without it (`actions/cache` defaults it to `false`).
+2. **A workspace-relative cached path** (`.deps-cache`). `actions/cache` cannot
+   translate an absolute path such as `~/.build-artifacts` across operating
+   systems: with `enableCrossOsArchive` it re-roots the archive at
+   `GITHUB_WORKSPACE`, so a Linux-written entry unpacked on Windows lands in
+   `D:\a\<repo>` rather than `C:\Users\runneradmin`, and nothing reads it.
+
+Hence the staging directory: jobs cache `.deps-cache` and copy to/from
+`$USERPROFILE/.build-artifacts` around it. **Verify a change here by grepping a
+Windows job log** for `Downloading` (must be 0) and `was already downloaded`
+(must be 2) — a green run proves nothing on its own.
 
 Why this works with **no PostSharp.Engineering changes**:
 
