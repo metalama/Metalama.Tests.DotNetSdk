@@ -185,12 +185,12 @@ jobs:
 
     - name: Configure the dependency to Metalama
       shell: pwsh
-      run: ./Build.ps1 dependencies set BuildServer Metalama --branch ${{ github.ref_name }} --nologo --no-progress
+      run: ./Build.ps1 dependencies set BuildServer Metalama --branch ${{ github.ref_name }} --nologo
 
     # Downloads Metalama and, transitively, Metalama.Compiler.
     - name: Fetch dependencies
       shell: pwsh
-      run: ./Build.ps1 dependencies fetch --nologo --no-progress
+      run: ./Build.ps1 dependencies fetch --nologo
 
     # Read back what the fetch actually resolved. The generated file is
     # eng/Versions.<Config>[.ci].g.props and carries one LocalDependencySource per
@@ -275,12 +275,12 @@ jobs:
     - name: Configure the dependency to Metalama
       if: steps.cache-deps.outputs.cache-hit != 'true'
       shell: pwsh
-      run: ./Build.ps1 dependencies set BuildServer Metalama --buildNumber ${{ needs.resolve-dependencies.outputs.build-number }} --buildTypeId ${{ needs.resolve-dependencies.outputs.build-type-id }} --nologo --no-progress
+      run: ./Build.ps1 dependencies set BuildServer Metalama --buildNumber ${{ needs.resolve-dependencies.outputs.build-number }} --buildTypeId ${{ needs.resolve-dependencies.outputs.build-type-id }} --nologo
 
     - name: Fetch dependencies
       if: steps.cache-deps.outputs.cache-hit != 'true'
       shell: pwsh
-      run: ./Build.ps1 dependencies fetch --nologo --no-progress
+      run: ./Build.ps1 dependencies fetch --nologo
 
     - name: Save dependencies to cache
       if: steps.cache-deps.outputs.cache-hit != 'true'
