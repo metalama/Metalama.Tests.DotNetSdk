@@ -15,9 +15,9 @@ jobs:
     
     strategy:
       matrix:
-        branch: 
-          - 'develop/2025.1'
+        branch:
           - 'develop/2026.0'
+          - 'develop/2026.1'
     
     steps:
     - name: Trigger Platform Integration Tests on ${{ matrix.branch }}
