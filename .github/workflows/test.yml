@@ -740,6 +740,7 @@ jobs:
           ].join('\n');
           
           // Update the issue
+          let summaryError = null;
           try {
             await github.rest.issues.update({
               owner: context.repo.owner,
@@ -747,11 +748,89 @@ jobs:
               issue_number: parseInt(issueNumber),
               body: issueBody
             });
-            
+
             console.log(`✅ Successfully updated issue #${issueNumber} with latest test summary`);
             console.log(`🔗 View at: https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}`);
-            
+
           } catch (error) {
             console.error(`❌ Failed to update issue #${issueNumber}:`, error.message);
-            throw error;
+            // Remember the error but keep going: a failure report is more useful
+            // than no report at all, and it is rethrown at the end of the script.
+            summaryError = error;
+          }
+
+          // ── Failure report ─────────────────────────────────────────────────
+          // In addition to the summary pseudo-issue (which is overwritten on every
+          // run), open a NEW issue whenever at least one matrix cell was actually
+          // tried and failed. Cells that were excluded from the matrix, skipped or
+          // cancelled are NOT failures and must not trigger a report.
+          const failedResults = results.filter(r => r.status === 'failure');
+
+          if (failedResults.length === 0) {
+            console.log('✅ No failed matrix cells - no failure issue created.');
+          } else {
+            console.log(`❌ ${failedResults.length} failed matrix cell(s) - creating a failure issue.`);
+
+            const sortedFailures = failedResults.slice().sort((a, b) =>
+              a.dotnetVersion.localeCompare(b.dotnetVersion, undefined, { numeric: true }) ||
+              a.sdkSource.localeCompare(b.sdkSource) ||
+              a.osDisplay.localeCompare(b.osDisplay) ||
+              a.projectType.localeCompare(b.projectType));
+
+            const summaryIssueUrl =
+              `https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}`;
+
+            const failureBody = [
+              `# ❌ ${failedResults.length} failed cell(s) out of ${totalJobs} on \`${branch}\``,
+              '',
+              `> **Run:** [${context.runId}](${runUrl})`,
+              `> **Branch:** \`${branch}\``,
+              `> **Commit:** ${context.sha}`,
+              `> **Date:** ${timestamp}`,
+              `> **Full summary:** [#${issueNumber}](${summaryIssueUrl})`,
+              '',
+              `**Total:** ${totalJobs} | **Successful:** ${successfulJobs} | **Failed:** ${failedJobs} | **Cancelled:** ${cancelledJobs}`,
+              '',
+              '## Failed cells',
+              '',
+              '| OS | .NET | SDK version | SDK source | Project type | Job |',
+              '|---|---|---|---|---|---|',
+              ...sortedFailures.map(r =>
+                `| ${r.os} | ${r.dotnetVersion} | ${r.exactVersion || 'n/a'} | ${r.sdkSource} | ${r.projectType} | [logs](${r.url}) |`),
+              '',
+              '---',
+              '',
+              '*This issue was created automatically by the Platform Integration Tests workflow.*'
+            ].join('\n');
+
+            const failureTitle =
+              `❌ Platform Integration Tests: ${failedResults.length} failed cell(s) on ${branch} (run ${context.runId})`;
+
+            const createIssue = (labels) => github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: failureTitle,
+              body: failureBody,
+              ...(labels ? { labels } : {})
+            });
+
+            try {
+              let created;
+              try {
+                created = await createIssue(['test-failure']);
+              } catch (labelError) {
+                // The label may not exist in this repository; issue creation then
+                // fails with 422. Retry without labels rather than lose the report.
+                console.warn(`⚠️ Could not create the issue with labels (${labelError.message}); retrying without labels.`);
+                created = await createIssue(null);
+              }
+              console.log(`📣 Created failure issue #${created.data.number}: ${created.data.html_url}`);
+            } catch (error) {
+              console.error('❌ Failed to create the failure issue:', error.message);
+              throw error;
+            }
+          }
+
+          if (summaryError) {
+            throw summaryError;
           }
