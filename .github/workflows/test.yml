@@ -1190,6 +1190,7 @@ jobs:
             const sortedFailures = failedResults.slice().sort((a, b) =>
               a.dotnetVersion.localeCompare(b.dotnetVersion, undefined, { numeric: true }) ||
               a.sdkSource.localeCompare(b.sdkSource) ||
+              a.buildTool.localeCompare(b.buildTool) ||
               a.osDisplay.localeCompare(b.osDisplay) ||
               a.projectType.localeCompare(b.projectType));
 
@@ -1209,10 +1210,10 @@ jobs:
               '',
               '## Failed cells',
               '',
-              '| OS | .NET | SDK version | SDK source | Project type | Job |',
-              '|---|---|---|---|---|---|',
+              '| OS | .NET | SDK version | SDK source | Build tool | Project type | Job |',
+              '|---|---|---|---|---|---|---|',
               ...sortedFailures.map(r =>
-                `| ${r.os} | ${r.dotnetVersion} | ${r.exactVersion || 'n/a'} | ${r.sdkSource} | ${r.projectType} | [logs](${r.url}) |`),
+                `| ${r.os} | ${r.dotnetVersion} | ${r.exactVersion || 'n/a'} | ${r.sdkSource} | ${r.buildTool} | ${r.projectType} | [logs](${r.url}) |`),
               '',
               '---',
               '',
