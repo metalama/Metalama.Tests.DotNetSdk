@@ -197,9 +197,32 @@ one week is already the platform behaviour. If the artifacts turn out to exceed
 the 10 GB budget, move to Release assets or external TeamCity artifact storage
 (S3/Azure Blob/R2) instead.
 
-Seeding is **best-effort**: `build` runs even if a seed job fails, because a
-cache miss degrades to the old TeamCity download rather than breaking the run.
-A miss emits a `::warning::` so it is visible in the run summary.
+**A failed seed job takes the whole run with it.** `build` declares
+`needs: resolve-dependencies`, so a seeding failure skips every matrix cell —
+run 31949158055 lost all 232 that way. This is *not* best-effort, despite what
+this file used to claim: that description belonged to an earlier design (commit
+`34b0b66`) which had a separate best-effort `seed-dependencies` job alongside
+the required resolver. `6e80c4b` collapsed the two into one, and `f3d9c26`
+removed the cells' fallback as well. All-or-nothing is the coherent behaviour
+now: under `--cached-only`, a failed seed means every cell would fail anyway,
+and skipping 232 cells beats failing them.
+
+Two consequences are handled explicitly:
+
+- **The seeding download is retried** (3 attempts, 60 s apart). One dropped
+  connection would otherwise cost the entire run, and the download is ~360 MB
+  over a constrained uplink on an HttpClient with the default 100 s per-request
+  timeout. Retrying is safe with no cleanup: `DownloadBuild` deletes the restore
+  directory whenever `.completed` is absent, so a partial tree is discarded
+  rather than reused.
+- **An empty matrix is reported.** `generate-summary` has `if: always()`, so it
+  also runs when `build` was skipped and there are no `build (...)` jobs to
+  parse. It used to overwrite the summary issue with an empty report and open no
+  failure issue — making a *total* failure the only kind that reported nothing.
+  It now leaves the summary intact and opens a "the matrix never ran" issue.
+
+The branches are also **staggered** in `start-tests.yml` rather than dispatched
+together, so their seeding jobs never compete for the uplink.
 
 ## x86 SDK testing
 

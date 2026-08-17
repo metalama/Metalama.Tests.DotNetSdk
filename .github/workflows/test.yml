@@ -223,9 +223,36 @@ jobs:
     # `dependencies set` already resolves the branch and downloads the artifacts
     # (Metalama and, transitively, Metalama.Compiler) -- a separate
     # `dependencies fetch` would be redundant.
+    #
+    # RETRIED, because this single step gates the entire run: `build` needs this
+    # job, so one dropped connection here skips every matrix cell. That is not
+    # hypothetical -- run 31949158055 died exactly this way, 13 minutes into a
+    # ~360 MB download, with "The response ended prematurely". The artifacts come
+    # from a self-hosted TeamCity on a constrained uplink, and PostSharp.Engineering
+    # downloads them on an HttpClient with the default 100 s per-request timeout,
+    # so a large package under any contention is a coin flip rather than a certainty.
+    #
+    # A retry is safe and needs no cleanup: when the `.completed` sentinel is
+    # absent, DownloadBuild deletes the whole restore directory before downloading
+    # again (DependenciesHelper.cs:619), so a partial tree from a failed attempt is
+    # discarded rather than mistaken for a good one. Conversely, whatever DID
+    # complete on an earlier attempt keeps its sentinel and is skipped, so retries
+    # get cheaper rather than starting from zero.
     - name: Configure the dependency to Metalama
       shell: pwsh
-      run: ./Build.ps1 dependencies set BuildServer Metalama --branch ${{ github.ref_name }} --nologo --no-progress
+      run: |
+        $attempts = 3
+        for ($i = 1; $i -le $attempts; $i++) {
+          Write-Host "Dependency download attempt $i of $attempts."
+          ./Build.ps1 dependencies set BuildServer Metalama --branch ${{ github.ref_name }} --nologo --no-progress
+          if ($LASTEXITCODE -eq 0) { exit 0 }
+          if ($i -lt $attempts) {
+            Write-Host "::warning::Attempt $i failed with exit code $LASTEXITCODE. Retrying in 60 s."
+            Start-Sleep -Seconds 60
+          }
+        }
+        Write-Host "::error::Could not download the Metalama artifacts after $attempts attempts."
+        exit 1
 
     # Read back what the download actually resolved. The generated file is
     # eng/Versions.<Config>[.ci].g.props and carries one LocalDependencySource per
@@ -993,7 +1020,83 @@ jobs:
             }).filter(Boolean);
           
           console.log(`Found ${results.length} test jobs`);
-          
+
+          const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+          const summaryIssueUrl =
+            `https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}`;
+
+          // Opens a failure issue, falling back to no labels: the `test-failure`
+          // label may not exist in the repository, which fails creation with 422,
+          // and a report without labels beats no report.
+          const createFailureIssue = async (title, body) => {
+            const create = (labels) => github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              ...(labels ? { labels } : {})
+            });
+            let created;
+            try {
+              created = await create(['test-failure']);
+            } catch (labelError) {
+              console.warn(`⚠️ Could not create the issue with labels (${labelError.message}); retrying without labels.`);
+              created = await create(null);
+            }
+            console.log(`📣 Created failure issue #${created.data.number}: ${created.data.html_url}`);
+            return created;
+          };
+
+          // ── The matrix never ran ────────────────────────────────────────────
+          // This job carries `if: always()`, so it also runs when `build` was
+          // SKIPPED -- which is what happens whenever resolve-dependencies fails,
+          // since `build` needs it. There are then no `build (...)` jobs to parse.
+          //
+          // Without this guard that case was the ONLY kind of failure that
+          // reported nothing at all: zero parsed cells means zero failed cells, so
+          // no failure issue was opened, and the summary issue was overwritten with
+          // an empty "Total Jobs: 0" report that destroyed the last good one. Run
+          // 31949158055 lost all 232 cells and said nothing. Report it loudly and
+          // leave the previous summary intact.
+          if (results.length === 0) {
+            const blocker = allJobs.find(j =>
+              j.name.startsWith('resolve-dependencies') && j.conclusion !== 'success');
+            const reason = blocker
+              ? `\`${blocker.name}\` ended as \`${blocker.conclusion}\`, so every matrix cell was skipped.`
+              : 'No `build (...)` job was found in this run.';
+
+            console.log(`❌ No matrix cell ran. ${reason}`);
+
+            await createFailureIssue(
+              `❌ Platform Integration Tests: the matrix never ran on ${branch} (run ${context.runId})`,
+              [
+                `# ❌ No matrix cell ran on \`${branch}\``,
+                '',
+                `> **Run:** [${context.runId}](${runUrl})`,
+                `> **Branch:** \`${branch}\``,
+                `> **Commit:** ${context.sha}`,
+                `> **Date:** ${new Date().toISOString()}`,
+                `> **Last good summary:** [#${issueNumber}](${summaryIssueUrl}) (left untouched)`,
+                '',
+                reason,
+                '',
+                'Nothing was tested on this branch by this run. The summary issue still',
+                'shows the results of the previous run.',
+                '',
+                '## Jobs in this run',
+                '',
+                '| Job | Status |',
+                '|---|---|',
+                ...allJobs.map(j => `| ${j.name} | ${j.conclusion || j.status} |`),
+                '',
+                '---',
+                '',
+                '*This issue was created automatically by the Platform Integration Tests workflow.*'
+              ].join('\n'));
+
+            return;
+          }
+
           // Generate summary statistics
           const totalJobs = results.length;
           const successfulJobs = results.filter(r => r.status === 'success').length;
@@ -1134,8 +1237,7 @@ jobs:
           
           // Create the issue body
           const timestamp = new Date().toISOString();
-          const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-          
+
           const issueBody = [
             '<!-- AUTO-GENERATED TEST SUMMARY - DO NOT EDIT MANUALLY -->',
             '# 🤖 Automated Test Results Summary',
@@ -1194,9 +1296,6 @@ jobs:
               a.osDisplay.localeCompare(b.osDisplay) ||
               a.projectType.localeCompare(b.projectType));
 
-            const summaryIssueUrl =
-              `https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}`;
-
             const failureBody = [
               `# ❌ ${failedResults.length} failed cell(s) out of ${totalJobs} on \`${branch}\``,
               '',
@@ -1223,25 +1322,8 @@ jobs:
             const failureTitle =
               `❌ Platform Integration Tests: ${failedResults.length} failed cell(s) on ${branch} (run ${context.runId})`;
 
-            const createIssue = (labels) => github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: failureTitle,
-              body: failureBody,
-              ...(labels ? { labels } : {})
-            });
-
             try {
-              let created;
-              try {
-                created = await createIssue(['test-failure']);
-              } catch (labelError) {
-                // The label may not exist in this repository; issue creation then
-                // fails with 422. Retry without labels rather than lose the report.
-                console.warn(`⚠️ Could not create the issue with labels (${labelError.message}); retrying without labels.`);
-                created = await createIssue(null);
-              }
-              console.log(`📣 Created failure issue #${created.data.number}: ${created.data.html_url}`);
+              await createFailureIssue(failureTitle, failureBody);
             } catch (error) {
               console.error('❌ Failed to create the failure issue:', error.message);
               throw error;
