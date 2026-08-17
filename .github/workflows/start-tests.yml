@@ -13,13 +13,37 @@ jobs:
       actions: write  # Required to trigger other workflows
       contents: read
     
+    # The branches are STAGGERED, not fired together.
+    #
+    # Each branch's run opens with a single `resolve-dependencies` job that pulls
+    # the Metalama artifacts (~360 MB) from the self-hosted TeamCity over a
+    # constrained uplink. Two branches seeding at the same instant compete for that
+    # link, and on 2026-08-16 that is exactly what broke both runs at once: one
+    # branch's seeding job was starved until its connection dropped, and since
+    # `build` needs that job, its entire matrix was skipped.
+    #
+    # Once seeded, the matrix cells restore from the Actions cache and never touch
+    # the uplink, so the contention window lasts only as long as the seeding job --
+    # a minute or two on a free link. The delay below is generous by comparison.
+    #
+    # Add a new branch with a delay one step further out. Do not give two branches
+    # the same delay.
     strategy:
       matrix:
-        branch: 
-          - 'develop/2025.1'
-          - 'develop/2026.0'
-    
+        include:
+          - branch: 'develop/2026.0'
+            delay-minutes: 0
+          - branch: 'develop/2026.1'
+            delay-minutes: 20
+
     steps:
+    - name: Wait ${{ matrix.delay-minutes }} minute(s) before triggering
+      if: matrix.delay-minutes > 0
+      run: |
+        echo "Staggering the dispatch of ${{ matrix.branch }} by ${{ matrix.delay-minutes }} minute(s)"
+        echo "so that its dependency seeding does not compete with the other branch."
+        sleep $(( ${{ matrix.delay-minutes }} * 60 ))
+
     - name: Trigger Platform Integration Tests on ${{ matrix.branch }}
       uses: actions/github-script@v7
       with:
