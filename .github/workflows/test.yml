@@ -101,7 +101,7 @@ env:
   # ═══════════════════════════════════════════════════════════════════════════
 
   # Workflow-level so the dependency-seeding job can key its cache on it too.
-  CacheKeyPrefix: '2026.1-3' # Increase this value to invalidate the cache.
+  CacheKeyPrefix: '2026.1-4' # Increase this value to invalidate the cache.
 
 jobs:
 
