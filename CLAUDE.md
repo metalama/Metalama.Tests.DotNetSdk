@@ -113,11 +113,118 @@ Set-Location (Join-Path $PSScriptRoot $EngPath "src")
 
 ## apt SDK Testing Notes
 
-- Ubuntu backports PPA uses `dotnetX` naming (e.g., `dotnet8`, `dotnet9`, `dotnet10`)
-- .NET 10.0 apt package only available for Ubuntu 22.04 (Jammy), not 24.04 (Noble)
+- Ubuntu backports PPA uses `dotnetX` naming (e.g., `dotnet8`, `dotnet9`)
 - apt installs to `/usr/lib/dotnet`, setup-dotnet installs to `/usr/share/dotnet`
 - GitHub API returns max 100 jobs per page - use pagination for large matrices
 - when testing a new workflow, comment out the old test matrix, and only select the failing configurations. After success, restore the full matrix
+
+## .NET 10 is not tested on this branch
+
+The matrix covers .NET 8 and 9 only. Metalama 2026.0 does not support .NET 10:
+its Metalama.Compiler bundles Roslyn 5.6, while the .NET 10.0.4xx SDK ships a
+Razor generator built against Roslyn 5.9. Metalama detects the mismatch and
+substitutes its own Razor generator from SDK 10.0.302 (`warning LAMA0617`), but
+that substitution does not bring `Microsoft.Extensions.ObjectPool` 10.0.0 with
+it, so every Razor-hosting project type then dies with:
+
+```
+error CS8785: Generator 'RazorSourceGenerator' failed to generate source ...
+  'Could not load file or assembly 'Microsoft.Extensions.ObjectPool, Version=10.0.0.0 ...'
+```
+
+That was 19 red cells in run 31949157887 before .NET 10 was dropped. .NET 10 is
+covered on `develop/2026.1`, whose Metalama carries Roslyn 5.9. **Do not add
+`10.0` back to the matrix here** unless Metalama.Compiler 2026.0 moves to
+Roslyn 5.9.
+
+`ubuntu-22.04` was removed along with it: that runner image was in the matrix
+only to get the `dotnet10` apt package, which Canonical does not publish for
+24.04.
+
+## Dependency seeding (keeping TeamCity artifacts off the company uplink)
+
+The Metalama artifacts come from a self-hosted TeamCity on a LAN with limited
+upstream bandwidth. Without seeding, every matrix job downloads them — around a
+hundred pulls of the same payload per full run. Worse, the two branches are
+dispatched simultaneously by `start-tests.yml`, so an unseeded branch saturates
+the link for the other one too: on 2026-08-16 the unseeded 2026.0 matrix starved
+2026.1's single seeding job, and *both* runs failed.
+
+The workflow has two layers:
+
+1. **`resolve-dependencies`** — resolves "latest Metalama build on this branch"
+   **once**, downloads it, saves it to the Actions cache, and publishes
+   `build-number`, `build-type-id` and `deps-id` as job outputs.
+2. **`build`** — restores from that cache instead of downloading.
+
+**Requires PostSharp.Engineering >= 2023.2.400** (`eng/Versions.props`) for the
+`--cached-only` flag.
+
+**One seeding job covers every platform.** The artifacts are plain NuGet packages —
+no symlinks, no executable bits, nothing platform-specific — so the cache key
+carries no `runner.os`/`runner.arch`. Do not re-introduce a per-platform seeding
+matrix: it downloads the identical payload N times for no benefit.
+
+**Sharing one cache entry across OSes needs two things, and both fail silently.**
+A job that gets this wrong still passes — it just downloads from TeamCity and emits
+a `::warning::`, which is easy to miss:
+
+1. **`enableCrossOsArchive: true`** on every restore/save. Windows rejects entries
+   written on another platform without it (`actions/cache` defaults it to `false`).
+2. **A workspace-relative cached path** (`.deps-cache`). `actions/cache` cannot
+   translate an absolute path such as `~/.build-artifacts` across operating
+   systems: with `enableCrossOsArchive` it re-roots the archive at
+   `GITHUB_WORKSPACE`, so a Linux-written entry unpacked on Windows lands in
+   `D:\a\<repo>` rather than `C:\Users\runneradmin`, and nothing reads it.
+
+Hence the staging directory: jobs cache `.deps-cache` and copy to/from
+`$USERPROFILE/.build-artifacts` around it.
+
+**The `build` jobs pass `--cached-only`**, so a cache miss *fails the job* instead
+of silently downloading from TeamCity. This is deliberate — the silent fallback
+hid a real bug twice on 2026.1: the run went green while every Windows job pulled
+over the uplink. Build numbers are still resolved against TeamCity; only the
+artifact download is forbidden. `resolve-dependencies` must **never** get this
+flag: it is the job that populates the cache.
+
+The trade-off is that a cache miss is now fatal rather than slow. If GitHub evicts
+the entry mid-run, matrix jobs fail. Remove the flag to get the old degrade-to-slow
+behaviour back.
+
+**Verify a change here by grepping a Windows job log** for `Downloading` (must be 0)
+and `was already downloaded` (must be 2) — a green run proves nothing on its own.
+
+Why this works with **no PostSharp.Engineering changes**:
+
+- `DependenciesHelper.DownloadBuild` writes a `.completed` sentinel next to the
+  artifacts and **skips the download entirely when it exists**, so a
+  cache-restored tree is reused verbatim.
+- The absolute paths baked into `nuget.config` and `eng/Versions.*.g.props` do
+  not need to survive the cache — every job regenerates them locally in
+  `Build.ps1 prepare`. Only the artifacts themselves must be restored.
+
+Two things to know:
+
+- **`USERPROFILE` must be pinned on Unix.** The cache location is
+  `Environment.GetEnvironmentVariable("USERPROFILE") ?? Path.GetTempPath()`
+  (`DependenciesHelper.cs:584`). `USERPROFILE` never exists on Linux/macOS, and
+  on macOS the fallback is a volatile per-session `/var/folders/...` path that
+  cannot be cached. Every job that touches `~/.build-artifacts` therefore sets
+  `USERPROFILE=$HOME` on non-Windows.
+- **The build number is pinned, not re-resolved.** Jobs use
+  `dependencies set BuildServer Metalama --buildNumber N --buildTypeId T`. Beyond
+  matching the cache key, this fixes a real hazard: when each job resolved the
+  branch independently, a Metalama build completing mid-run silently split the
+  matrix across two different Metalama versions.
+
+Cache lifetime is GitHub's own — entries unused for 7 days are evicted and the
+repo-wide 10 GB budget is reclaimed LRU. **There is no per-entry TTL to set**;
+one week is already the platform behaviour.
+
+**A failed seed job takes the whole run with it.** `build` declares
+`needs: resolve-dependencies`, so a seeding failure skips every matrix cell —
+that is what run 31949158055 on 2026.1 did. This is the intended trade: one
+loud failure beats a hundred jobs hammering the uplink.
 
 ## Updating the macOS MAUI version pins
 
@@ -137,11 +244,14 @@ These macOS jobs cannot use the latest .NET SDK, because:
 So the macOS MAUI jobs are **pinned** in the `env:` block at the top of
 `test.yml`:
 
-- `MACOS_MAUI_SDK_9_0`, `MACOS_MAUI_SDK_10_0` — the SDK version, which is also
-  the workload-set version passed to `dotnet workload install --version`.
-- `MACOS_MAUI_XCODE_8_0` / `_9_0` / `_10_0` — the Xcode the pinned workload
-  requires (.NET 8 has no SDK pin; its iOS workload is frozen at Xcode 16.0,
-  which is always on the image).
+- `MACOS_MAUI_SDK_9_0` — the SDK version, which is also the workload-set version
+  passed to `dotnet workload install --version`.
+- `MACOS_MAUI_XCODE_8_0` / `_9_0` — the Xcode the pinned workload requires
+  (.NET 8 has no SDK pin; its iOS workload is frozen at Xcode 16.0, which is
+  always on the image).
+
+There is no `_10_0` pin on this branch: .NET 10 is not tested here — see
+".NET 10 is not tested on this branch" above.
 
 The pins lag intentionally. **Review them periodically** (roughly monthly, or
 whenever a macOS MAUI job fails with a `requires Xcode` error):
@@ -155,10 +265,10 @@ whenever a macOS MAUI job fails with a `requires Xcode` error):
    newest Xcode.
    - Read the required Xcode from the release **body**, never the tag name —
      the tag is stale (e.g. tag `...xcode26.2...` whose body requires Xcode 26.3).
-   - The release's workload-set version band (e.g. `10.0.2xx`) must be a band
+   - The release's workload-set version band (e.g. `9.0.3xx`) must be a band
      `dotnet` can install — it just needs an SDK of the same band, which the
      pin itself provides.
-3. From that release body, take the **workload set version** (e.g. `10.0.202`)
+3. From that release body, take the **workload set version** (e.g. `9.0.313`)
    and set the matching `MACOS_MAUI_SDK_*`. If the required Xcode changed, also
    update the matching `MACOS_MAUI_XCODE_*`.
 4. When the runner image gains a newer Xcode, repeat — the pins can then move up
