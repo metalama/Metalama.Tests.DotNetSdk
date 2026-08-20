@@ -22,5 +22,6 @@ var data = new BaseCommandData( product );
 app.Configure( c => c.AddCommand<CreateProjectCommand>( "create-project" ).WithData( data ) );
 app.Configure( c => c.AddCommand<VerifyTransformationsCommand>( "verify-transformations" ).WithData( data ) );
 app.Configure( c => c.AddCommand<SetAssemblyLocatorRefVersionCommand>( "set-ref-version" ).WithData( data ) );
+app.Configure( c => c.AddCommand<TestPackagesCommand>( "test-packages" ).WithData( data ) );
 
 return app.Run( args );

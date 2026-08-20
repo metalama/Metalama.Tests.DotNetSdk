@@ -431,3 +431,61 @@ attempts, 60 s apart) does not distinguish a dropped connection from a
 deterministic failure, so an unresolvable branch burns two extra minutes before
 reporting. The retry is load-bearing for the flaky-uplink case it was written
 for, so it was left alone.
+
+
+## Metalama.Patterns / Metalama.Extensions package tests
+
+`tests/packages` holds one small console program per Metalama package: it exercises one
+obvious feature and returns a non-zero exit code if it did not work. There is no test
+framework on purpose — a plain executable behaves identically under every SDK version,
+SDK source and build tool in the matrix. `./Build.ps1 test-packages` builds and runs them
+all and prints a per-package summary.
+
+**They add no matrix dimension.** The steps are gated on `matrix.project-type`, which is a
+filter over existing cells:
+
+- `console` cells run `tests/packages`. Those 41 cells already span **all 41** distinct
+  `(os, dotnet-version, sdk-source, build-tool)` combinations in the 297-cell matrix, so
+  this is full platform coverage — running them in every cell would repeat the same 41
+  combinations nine times for nothing.
+- `wpf` cells run `tests/packages/Windows`, which holds `Metalama.Patterns.Wpf` (it needs
+  a `net*-windows` target framework and `UseWPF`). Those 24 cells cover every Windows
+  combination.
+
+If you add a package that only builds on Windows, put it under `tests/packages/Windows`.
+Discovery is **not** recursive, so the cross-platform run never picks it up.
+
+**Where the packages come from.** `Metalama.Premium` was always an explicit dependency of
+this product; it simply had no source configured, which is what the long-standing
+"A property named 'MetalamaPremiumVersion' must be defined" warning meant. Declaring that
+property in `eng/AutoUpdatedVersions.props` lets it resolve. The split:
+
+- The **`Metalama`** artifact — already downloaded by `resolve-dependencies` — carries
+  Patterns.Contracts, .Memoization, .Observability, .Immutability, .Caching(+.Aspects,
+  .Backend), .Wpf and Extensions.DependencyInjection(+.ServiceLocator), .Multicast,
+  .Metrics, .DiffEngine, .HtmlWriter. `metalama/Metalama` is a monorepo, so these cost no
+  extra download.
+- **`Metalama.Premium`** carries Extensions.Architecture, .Validation, .CodeFixes and
+  Patterns.Caching.Backends.Azure / .Redis. This is one extra seeding download.
+
+**Four packages need a license key.** `VerifyMetalamaLicense` runs at build time for
+Extensions.Validation, Extensions.CodeFixes, Caching.Backends.Azure and
+Caching.Backends.Redis; the other thirteen have no license task. The key is the MSBuild
+property `$(MetalamaLicense)`, supplied from the `METALAMA_LICENSE` secret. Without it
+those four fail with `LAMA0806: The component '...' is not licensed`.
+
+Note when testing this locally: a developer machine with a registered Metalama license
+passes the check silently, so it does **not** reproduce CI. Add
+`-p:MetalamaIgnoreUserLicenses=true` to get the CI behaviour.
+
+**Not every package can be asserted at run time**, and the three exceptions are
+deliberate:
+
+- Extensions.Validation, .CodeFixes, .DiffEngine and .HtmlWriter ship **no `lib/` folder** —
+  they are build-time extensions with no run-time API. Their test proves that referencing
+  the package still produces a working Metalama build on that platform, which is exactly
+  what this repository exists to check.
+- Extensions.Architecture is a compile-time constraint; the test asserts that conforming
+  code compiles and works. The violation case is not covered.
+- Caching.Backends.Redis / .Azure would need live servers. Their tests go as far as they
+  can offline, constructing the backend configuration.

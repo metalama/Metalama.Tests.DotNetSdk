@@ -119,7 +119,7 @@ env:
   # ═══════════════════════════════════════════════════════════════════════════
 
   # Workflow-level so the dependency-seeding job can key its cache on it too.
-  CacheKeyPrefix: '2026.1-4' # Increase this value to invalidate the cache.
+  CacheKeyPrefix: '2026.1-5' # Increase this value to invalidate the cache.
 
 jobs:
 
@@ -180,6 +180,8 @@ jobs:
     outputs:
       build-number: ${{ steps.resolve.outputs.build-number }}
       build-type-id: ${{ steps.resolve.outputs.build-type-id }}
+      premium-build-number: ${{ steps.resolve.outputs.premium-build-number }}
+      premium-build-type-id: ${{ steps.resolve.outputs.premium-build-type-id }}
       deps-id: ${{ steps.resolve.outputs.deps-id }}
     steps:
     - name: Checkout
@@ -294,7 +296,7 @@ jobs:
         $attempts = 3
         for ($i = 1; $i -le $attempts; $i++) {
           Write-Host "Dependency download attempt $i of $attempts."
-          ./Build.ps1 dependencies set BuildServer Metalama --branch ${{ steps.metalama-branch.outputs.branch }} --nologo --no-progress
+          ./Build.ps1 dependencies set BuildServer Metalama Metalama.Premium --branch ${{ steps.metalama-branch.outputs.branch }} --nologo --no-progress
           if ($LASTEXITCODE -eq 0) { exit 0 }
           if ($i -lt $attempts) {
             Write-Host "::warning::Attempt $i failed with exit code $LASTEXITCODE. Retrying in 60 s."
@@ -323,12 +325,19 @@ jobs:
         foreach ($s in $sources) { Write-Host "  $($s.Include) #$($s.BuildNumber) ($($s.CiBuildTypeId))" }
         $metalama = $sources | Where-Object { $_.Include -eq 'Metalama' } | Select-Object -First 1
         if (-not $metalama) { Write-Error 'The Metalama dependency was not resolved.'; exit 1 }
+        # Metalama.Premium carries the Extensions.Architecture / .Validation / .CodeFixes and
+        # Caching.Backends.* packages that the package tests exercise. It has always been an
+        # explicit dependency of this product; it simply had no source configured.
+        $premium = $sources | Where-Object { $_.Include -eq 'Metalama.Premium' } | Select-Object -First 1
+        if (-not $premium) { Write-Error 'The Metalama.Premium dependency was not resolved.'; exit 1 }
         # Identity of the whole dependency set, so a change in ANY resolved build
         # (including transitive ones such as Metalama.Compiler) busts the cache.
         $depsId = (($sources | Sort-Object Include |
           ForEach-Object { "$($_.Include)-$($_.CiBuildTypeId)-$($_.BuildNumber)" }) -join '_')
         "build-number=$($metalama.BuildNumber)" >> $env:GITHUB_OUTPUT
         "build-type-id=$($metalama.CiBuildTypeId)" >> $env:GITHUB_OUTPUT
+        "premium-build-number=$($premium.BuildNumber)" >> $env:GITHUB_OUTPUT
+        "premium-build-type-id=$($premium.CiBuildTypeId)" >> $env:GITHUB_OUTPUT
         "deps-id=$depsId" >> $env:GITHUB_OUTPUT
         Write-Host "deps-id=$depsId"
 
@@ -759,10 +768,16 @@ jobs:
     # every Windows job pulled from TeamCity. Better to fail loudly here.
     # Build numbers are still resolved against TeamCity; only the artifact download
     # is forbidden.
+    # Two invocations rather than one: --buildNumber/--buildTypeId describe a single
+    # dependency, so each pinned dependency needs its own call.
     - name: Configure the dependency to Metalama
       shell: pwsh
       if: steps.cache-build.outputs.cache-hit != 'true'
-      run: ./Build.ps1 dependencies set BuildServer Metalama --buildNumber ${{ needs.resolve-dependencies.outputs.build-number }} --buildTypeId ${{ needs.resolve-dependencies.outputs.build-type-id }} --cached-only --nologo --no-progress
+      run: |
+        ./Build.ps1 dependencies set BuildServer Metalama --buildNumber ${{ needs.resolve-dependencies.outputs.build-number }} --buildTypeId ${{ needs.resolve-dependencies.outputs.build-type-id }} --cached-only --nologo --no-progress
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        ./Build.ps1 dependencies set BuildServer Metalama.Premium --buildNumber ${{ needs.resolve-dependencies.outputs.premium-build-number }} --buildTypeId ${{ needs.resolve-dependencies.outputs.premium-build-type-id }} --cached-only --nologo --no-progress
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Install Java
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && steps.cache-build.outputs.cache-hit != 'true'
@@ -980,6 +995,37 @@ jobs:
       shell: pwsh
       if:  steps.cache-build.outputs.cache-hit != 'true'
       run: ./Build.ps1 verify-transformations --nologo
+
+    # ─── Metalama.Patterns / Metalama.Extensions package tests ───────────────────
+    #
+    # One small program per package under tests/packages, each exercising one obvious
+    # feature and returning non-zero if it did not work.
+    #
+    # These are gated on the PROJECT TYPE, which is a filter over the existing cells
+    # rather than a new matrix axis. That is not a compromise: the `console` cells
+    # already span all 41 distinct (os, dotnet-version, sdk-source, build-tool)
+    # combinations the full matrix contains, so running the package tests there covers
+    # every platform exactly once instead of nine times.
+    #
+    # The Windows-only set (Metalama.Patterns.Wpf, which needs a net*-windows target and
+    # UseWPF) rides on the `wpf` cells for the same reason: those 24 cells cover every
+    # Windows combination.
+    - name: Test packages
+      shell: pwsh
+      if: matrix.project-type == 'console' && steps.cache-build.outputs.cache-hit != 'true'
+      env:
+        # Metalama.Extensions.Validation / .CodeFixes and Caching.Backends.Azure / .Redis
+        # run VerifyMetalamaLicense at build time. Without a key those four fail with
+        # LAMA0806; the other thirteen packages need no license.
+        MetalamaLicense: ${{ secrets.METALAMA_LICENSE }}
+      run: ./Build.ps1 test-packages tests/packages --build-tool ${{ startsWith(matrix.build-tool, 'msbuild') && 'msbuild' || 'dotnet' }} --target-framework net${{ matrix.dotnet-version }} --nologo
+
+    - name: Test Windows-only packages
+      shell: pwsh
+      if: matrix.project-type == 'wpf' && steps.cache-build.outputs.cache-hit != 'true'
+      env:
+        MetalamaLicense: ${{ secrets.METALAMA_LICENSE }}
+      run: ./Build.ps1 test-packages tests/packages/Windows --build-tool ${{ startsWith(matrix.build-tool, 'msbuild') && 'msbuild' || 'dotnet' }} --target-framework net${{ matrix.dotnet-version }} --nologo
 
     # Create build cache marker file
     - name: Mark build cache as successful
