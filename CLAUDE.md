@@ -305,11 +305,17 @@ These macOS jobs cannot use the latest .NET SDK, because:
 So the macOS MAUI jobs are **pinned** in the `env:` block at the top of
 `test.yml`:
 
-- `MACOS_MAUI_SDK_9_0`, `MACOS_MAUI_SDK_10_0` — the SDK version, which is also
-  the workload-set version passed to `dotnet workload install --version`.
-- `MACOS_MAUI_XCODE_8_0` / `_9_0` / `_10_0` — the Xcode the pinned workload
-  requires (.NET 8 has no SDK pin; its iOS workload is frozen at Xcode 16.0,
-  which is always on the image).
+- `MACOS_MAUI_SDK_9_0`, `MACOS_MAUI_SDK_10_0`, `MACOS_MAUI_SDK_11_0` — the SDK
+  version, which for the released bands is also the workload-set version passed
+  to `dotnet workload install --version`.
+- `MACOS_MAUI_WORKLOADSET_11_0` — the workload-set version, needed only where it
+  differs from the SDK version. It does for the .NET 11 previews (SDK
+  `11.0.100-preview.3.26207.106` ships with set `11.0.100-preview.3.26214.1`);
+  for .NET 9/10 the two are identical, so those bands have no such variable and
+  the install step reuses the SDK pin.
+- `MACOS_MAUI_XCODE_8_0` / `_9_0` / `_10_0` / `_11_0` — the Xcode the pinned
+  workload requires (.NET 8 has no SDK pin; its iOS workload is frozen at Xcode
+  16.0, which is always on the image).
 
 The pins lag intentionally. **Review them periodically** (roughly monthly, or
 whenever a macOS MAUI job fails with a `requires Xcode` error):
@@ -328,10 +334,71 @@ whenever a macOS MAUI job fails with a `requires Xcode` error):
      pin itself provides.
 3. From that release body, take the **workload set version** (e.g. `10.0.202`)
    and set the matching `MACOS_MAUI_SDK_*`. If the required Xcode changed, also
-   update the matching `MACOS_MAUI_XCODE_*`.
+   update the matching `MACOS_MAUI_XCODE_*`. If the workload-set version is not
+   the SDK version — true for every preview band — set `MACOS_MAUI_SDK_*` from
+   the SDK release and `MACOS_MAUI_WORKLOADSET_*` from the macios release body.
 4. When the runner image gains a newer Xcode, repeat — the pins can then move up
    to a newer macios release.
 
 This is deliberate manual maintenance: there is no way to be on the latest .NET
 SDK and a working iOS/MacCatalyst workload at the same time during the gap
 between an Xcode release and the runner image picking it up.
+
+
+## .NET 11
+
+.NET 11 is in **preview** (preview 7, `11.0.100-preview.7.26381.103`, as of
+2026-08). Its axis value is `11.0`, and it behaves differently from the released
+bands in four ways.
+
+**Version resolution does not come from GitHub.** `GetLatestVersion.ps1` reads
+the dotnet/sdk GitHub releases, but dotnet/sdk **stopped tagging .NET 11
+previews after preview 2** (2026-03) while the product kept shipping one a
+month — so `11.0` resolved to a five-month-old SDK. The script now falls back to
+the official release metadata
+(`https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json`,
+the feed `dotnet-install` itself reads) whenever a channel's GitHub releases are
+**all prereleases**, or when GitHub knows the channel at all. Stable channels are
+untouched: they still resolve from GitHub, which is the only source here that
+supports feature-band filtering (`9.0.3xx`) directly.
+
+Do not "simplify" this by reading the metadata feed for every channel. The
+GitHub path exists because `dotnet-install` mis-resolves suffixed versions, and
+the metadata index has no notion of a feature band.
+
+**There is no apt package.** The dotnet/backports PPA publishes `dotnet6`
+through `dotnet10` only — Canonical does not package .NET previews. The whole
+`sdk-source: apt` axis is therefore excluded for `11.0`, which in turn leaves
+`ubuntu-22.04` (an apt-only runner here) with no `11.0` cells at all. Both
+excludes come out when .NET 11 reaches GA and `dotnet11` appears in the PPA.
+
+**macOS MAUI is pinned two previews further back than everything else.** The
+.NET 11 macios releases move with Xcode fast: preview 4 and later require Xcode
+26.4+, which requires macOS 26.2 — and the `macos-15` runner image tops out at
+Xcode 26.3. `dotnet-11.0.1xx-preview3-11588` (Xcode 26.3) is the newest .NET 11
+macios release this runner can host, so `MACOS_MAUI_SDK_11_0` sits at preview 3
+while every other `11.0` cell tests preview 7. The summary table annotates the
+deviating cells with their own SDK version, so this is visible rather than
+silent.
+
+This pin will **not** move forward when a newer preview ships — only when the
+`os` axis gains a `macos-26` runner. That is the real fix and is deliberately
+out of scope here: it changes every macOS cell, not just the .NET 11 ones.
+
+**The matrix grows by ~29%.** 230 cells for 8/9/10, 297 with 11.0 added. That
+only matters for the weekly scheduled runs on the develop branches; dispatching
+with `dotnet-version: 11.0` selects the 67 `11.0` cells alone.
+
+## The summary issue is only written by tracked branches
+
+`generate-summary` writes to a single per-branch pseudo-issue
+(`SUMMARY_ISSUE_NUMBER`, #7 on 2026.1) and opens a new issue for every failed
+cell. Both are keyed to the branch's *constant*, not to the run, so a run on a
+topic branch used to overwrite the develop branch's last good full-matrix report
+with its own partial one — and file failure issues for a matrix nobody expected
+to be green.
+
+The job now writes to issues only when the branch starts with `develop/` or
+`release/`. Every run, tracked or not, writes the same report to the **run
+summary** (`core.summary`), so a topic-branch run is still fully readable from
+the Actions page — it just leaves the issues alone.
