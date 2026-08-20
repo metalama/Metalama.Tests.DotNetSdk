@@ -5,6 +5,7 @@ using JetBrains.Annotations;
 using PostSharp.Engineering.BuildTools;
 using PostSharp.Engineering.BuildTools.Build;
 using PostSharp.Engineering.BuildTools.Utilities;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -53,19 +54,29 @@ internal class TestPackagesCommand : BaseCommand<TestPackagesCommandSettings>
             return false;
         }
 
-        var frameworkArgument = string.IsNullOrEmpty( settings.TargetFramework )
-            ? ""
-            : $" -p:PackageTestTargetFramework={settings.TargetFramework}";
+        // Pass the target framework through the ENVIRONMENT, not through -p:.
+        //
+        // `dotnet run --no-build` does not honour -p: on every SDK: on the .NET 8 SDK the
+        // property reached `dotnet build` (which produced bin/Debug/net8.0) but not
+        // `dotnet run`, which then looked for the props file's default in
+        // bin/Debug/net9.0 and died with "No such file or directory". MSBuild reads
+        // environment variables as properties on every SDK and both tools, so this is the
+        // one mechanism that behaves the same everywhere.
+        if ( !string.IsNullOrEmpty( settings.TargetFramework ) )
+        {
+            Environment.SetEnvironmentVariable( "PackageTestTargetFramework", settings.TargetFramework );
+            context.Console.WriteMessage( $"Target framework: {settings.TargetFramework}" );
+        }
 
         var failed = new List<string>();
 
         foreach ( var project in projects )
         {
-            var name = Path.GetFileNameWithoutExtension( project ).Replace( ".PackageTest", "", System.StringComparison.Ordinal );
+            var name = Path.GetFileNameWithoutExtension( project ).Replace( ".PackageTest", "", StringComparison.Ordinal );
 
             context.Console.WriteMessage( $"--- {name} ---" );
 
-            if ( !Build( context, settings, project, frameworkArgument ) )
+            if ( !Build( context, settings, project ) )
             {
                 context.Console.WriteError( $"{name}: BUILD FAILED." );
                 failed.Add( $"{name} (build)" );
@@ -76,7 +87,7 @@ internal class TestPackagesCommand : BaseCommand<TestPackagesCommandSettings>
             // `dotnet run` rather than invoking the executable directly: it resolves the
             // output path for us, which varies with the target framework (the WPF project
             // appends '-windows') and with the build tool that produced it.
-            if ( !DotNetInvocationHelper.Run( context, "run", $"--project \"{project}\" --no-build{frameworkArgument}" ) )
+            if ( !DotNetInvocationHelper.Run( context, "run", $"--project \"{project}\" --no-build" ) )
             {
                 context.Console.WriteError( $"{name}: TEST FAILED." );
                 failed.Add( name );
@@ -106,18 +117,18 @@ internal class TestPackagesCommand : BaseCommand<TestPackagesCommandSettings>
         return true;
     }
 
-    private static bool Build( BuildContext context, TestPackagesCommandSettings settings, string project, string frameworkArgument )
+    private static bool Build( BuildContext context, TestPackagesCommandSettings settings, string project )
     {
         if ( settings.BuildTool == "dotnet" )
         {
-            return DotNetInvocationHelper.Run( context, "build", $"\"{project}\"{frameworkArgument}" );
+            return DotNetInvocationHelper.Run( context, "build", $"\"{project}\"" );
         }
 
         // MSBuild.exe does not restore implicitly, unlike `dotnet build`.
         return ToolInvocationHelper.InvokeTool(
             context.Console,
             "msbuild",
-            $"\"{project}\" -restore{frameworkArgument}",
+            $"\"{project}\" -restore",
             context.RepoDirectory );
     }
 }
