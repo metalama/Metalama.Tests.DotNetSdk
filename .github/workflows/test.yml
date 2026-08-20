@@ -64,6 +64,11 @@ on:
           - msbuild-x64
           - msbuild-x86
           - msbuild-arm64
+      metalama-branch:
+        description: 'Metalama branch to take the artifacts from (default: this branch, or its parent develop branch when this is a topic branch)'
+        required: false
+        default: ''
+        type: string
 
 env:
   SUMMARY_ISSUE_NUMBER: 7  # Issue number for this branch
@@ -233,6 +238,38 @@ jobs:
           Write-Host 'No previously cached dependencies.'
         }
 
+    # Which Metalama branch to take the artifacts from.
+    #
+    # TeamCity resolves "the latest Metalama build on branch X", and X used to be
+    # this repository's own branch name. That only works for branches that exist
+    # in BOTH repositories -- the develop/* and release/* lines. A topic branch
+    # here has no counterpart in Metalama, so the lookup failed with
+    #
+    #   Cannot get the last build for build type '...', branch '...': No build available.
+    #
+    # and, since `build` needs this job, took the whole run with it (32359427586).
+    #
+    # A topic branch therefore falls back to the develop branch it forks from,
+    # which its own name already encodes: topic/2026.1/net11 -> develop/2026.1.
+    # The `metalama-branch` dispatch input overrides this, for the case where a
+    # topic branch here DOES have a matching Metalama branch to test against.
+    - name: Resolve the Metalama branch
+      id: metalama-branch
+      shell: pwsh
+      run: |
+        $branch = '${{ inputs.metalama-branch }}'
+        $ref = '${{ github.ref_name }}'
+        if ( $branch ) {
+          Write-Host "Using the Metalama branch given on dispatch."
+        } elseif ( $ref -match '^topic/([^/]+)/' ) {
+          $branch = "develop/$($Matches[1])"
+          Write-Host "'$ref' is a topic branch with no Metalama counterpart; using its parent develop branch."
+        } else {
+          $branch = $ref
+        }
+        Write-Host "::notice::Metalama dependency branch: $branch"
+        "branch=$branch" >> $env:GITHUB_OUTPUT
+
     # `dependencies set` already resolves the branch and downloads the artifacts
     # (Metalama and, transitively, Metalama.Compiler) -- a separate
     # `dependencies fetch` would be redundant.
@@ -257,7 +294,7 @@ jobs:
         $attempts = 3
         for ($i = 1; $i -le $attempts; $i++) {
           Write-Host "Dependency download attempt $i of $attempts."
-          ./Build.ps1 dependencies set BuildServer Metalama --branch ${{ github.ref_name }} --nologo --no-progress
+          ./Build.ps1 dependencies set BuildServer Metalama --branch ${{ steps.metalama-branch.outputs.branch }} --nologo --no-progress
           if ($LASTEXITCODE -eq 0) { exit 0 }
           if ($i -lt $attempts) {
             Write-Host "::warning::Attempt $i failed with exit code $LASTEXITCODE. Retrying in 60 s."

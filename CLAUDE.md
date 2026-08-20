@@ -402,3 +402,32 @@ The job now writes to issues only when the branch starts with `develop/` or
 `release/`. Every run, tracked or not, writes the same report to the **run
 summary** (`core.summary`), so a topic-branch run is still fully readable from
 the Actions page — it just leaves the issues alone.
+
+
+## The Metalama dependency branch is not this repository's branch
+
+`resolve-dependencies` asks TeamCity for "the latest Metalama build on branch X".
+X used to be `github.ref_name` — this repository's own branch — which silently
+assumes the branch exists in **both** repositories. That holds for the `develop/*`
+and `release/*` lines and for nothing else.
+
+Dispatching on a topic branch therefore failed outright:
+
+```
+Cannot get the last build for build type 'Metalama_Metalama20261_Metalama_DebugBuild',
+branch 'topic/2026.1/net11': No build available.
+```
+
+Because `build` declares `needs: resolve-dependencies`, that skipped all 67
+matrix cells (run 32359427586).
+
+A topic branch now falls back to the develop branch its own name encodes —
+`topic/2026.1/net11` → `develop/2026.1` — and the `metalama-branch` dispatch
+input overrides that when a topic branch here *does* have a matching Metalama
+branch to test against.
+
+Worth knowing when a seeding failure costs you time: the download retry (3
+attempts, 60 s apart) does not distinguish a dropped connection from a
+deterministic failure, so an unresolvable branch burns two extra minutes before
+reporting. The retry is load-bearing for the flaky-uplink case it was written
+for, so it was left alone.
