@@ -468,15 +468,24 @@ property in `eng/AutoUpdatedVersions.props` lets it resolve. The split:
 - **`Metalama.Premium`** carries Extensions.Architecture, .Validation, .CodeFixes and
   Patterns.Caching.Backends.Azure / .Redis. This is one extra seeding download.
 
-**Four packages need a license key.** `VerifyMetalamaLicense` runs at build time for
-Extensions.Validation, Extensions.CodeFixes, Caching.Backends.Azure and
-Caching.Backends.Redis; the other thirteen have no license task. The key is the MSBuild
-property `$(MetalamaLicense)`, supplied from the `METALAMA_LICENSE` secret. Without it
-those four fail with `LAMA0806: The component '...' is not licensed`.
+**Four packages run a license check, and CI satisfies it by itself.**
+`VerifyMetalamaLicense` runs at build time for Extensions.Validation,
+Extensions.CodeFixes, Caching.Backends.Azure and Caching.Backends.Redis; the other
+thirteen have no license task. **No secret is required**: Backstage's
+`UnattendedLicenseSource` grants a Metalama Professional licence to any *unattended*
+process, which every CI runner is. Verified on run 32364738233 — all sixteen packages
+passed with `MetalamaLicense` empty and no `METALAMA_LICENSE` secret in the repo or org.
 
-Note when testing this locally: a developer machine with a registered Metalama license
-passes the check silently, so it does **not** reproduce CI. Add
-`-p:MetalamaIgnoreUserLicenses=true` to get the CI behaviour.
+The workflow still passes `$(MetalamaLicense)` from an optional `METALAMA_LICENSE` secret.
+That is only an override for the day unattended detection stops applying; an unset secret
+is an empty value and the unattended licence takes over.
+
+**Local builds do not reproduce CI licensing, in either direction.** A developer machine
+with a registered Metalama licence passes silently for the wrong reason. Adding
+`-p:MetalamaIgnoreUserLicenses=true` does *not* give you the CI behaviour either — it
+removes the user licence while your interactive shell still is not an unattended process,
+so you get `LAMA0806: The component '...' is not licensed`, which CI never sees. Do not
+read that error as a CI failure.
 
 **Not every package can be asserted at run time**, and the three exceptions are
 deliberate:

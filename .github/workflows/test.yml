@@ -1015,8 +1015,11 @@ jobs:
       if: matrix.project-type == 'console' && steps.cache-build.outputs.cache-hit != 'true'
       env:
         # Metalama.Extensions.Validation / .CodeFixes and Caching.Backends.Azure / .Redis
-        # run VerifyMetalamaLicense at build time. Without a key those four fail with
-        # LAMA0806; the other thirteen packages need no license.
+        # run VerifyMetalamaLicense at build time. No key is needed here: Backstage's
+        # UnattendedLicenseSource grants a Metalama Professional licence to any unattended
+        # process, which every CI runner is. This is only an override, for the case where
+        # that detection ever stops applying; an unset secret is an empty value and the
+        # unattended licence takes over.
         MetalamaLicense: ${{ secrets.METALAMA_LICENSE }}
       run: ./Build.ps1 test-packages tests/packages --build-tool ${{ startsWith(matrix.build-tool, 'msbuild') && 'msbuild' || 'dotnet' }} --target-framework net${{ matrix.dotnet-version }} --nologo
 
