@@ -22,6 +22,13 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <!-- Every package test needs Metalama.Framework, both because aspects are written
+             against it and because it brings in Metalama.Compiler, without which the
+             C# language version these packages are built for is not available. -->
+        <PackageReference Include="Metalama.Framework" Version="$(MetalamaVersion)" />
+    </ItemGroup>
+
+    <ItemGroup>
         <!-- Every package test shares the same assertion helper, the same way the main
              test project shares IntroduceClassAttribute.cs from src/Directory.Build.props. -->
         <Compile Include="$(MSBuildThisFileDirectory)PackageTestCheck.cs" />
