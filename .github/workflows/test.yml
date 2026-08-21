@@ -1013,21 +1013,23 @@ jobs:
     - name: Test packages
       shell: pwsh
       if: matrix.project-type == 'console' && steps.cache-build.outputs.cache-hit != 'true'
-      env:
-        # Metalama.Extensions.Validation / .CodeFixes and Caching.Backends.Azure / .Redis
-        # run VerifyMetalamaLicense at build time. No key is needed here: Backstage's
-        # UnattendedLicenseSource grants a Metalama Professional licence to any unattended
-        # process, which every CI runner is. This is only an override, for the case where
-        # that detection ever stops applying; an unset secret is an empty value and the
-        # unattended licence takes over.
-        MetalamaLicense: ${{ secrets.METALAMA_LICENSE }}
+      # No licence key is passed, deliberately.
+      #
+      # Metalama.Extensions.Validation / .CodeFixes and Caching.Backends.Azure / .Redis
+      # run VerifyMetalamaLicense at build time. Backstage's UnattendedLicenseSource
+      # grants a Metalama Professional licence to any unattended process, which every
+      # runner here is, and that licence is UNSIGNED.
+      #
+      # Passing a real key is worse than passing nothing on this matrix. A real key is
+      # signed, so verifying it needs finite field DSA, which .NET 11 removed from macOS
+      # (metalama/Metalama#1860). Supplying the key is therefore what BREAKS the macOS
+      # .NET 11 cells; without it the unsigned unattended licence never touches DSA.
       run: ./Build.ps1 test-packages tests/packages --build-tool ${{ startsWith(matrix.build-tool, 'msbuild') && 'msbuild' || 'dotnet' }} --target-framework net${{ matrix.dotnet-version }} --nologo
 
     - name: Test Windows-only packages
       shell: pwsh
       if: matrix.project-type == 'wpf' && steps.cache-build.outputs.cache-hit != 'true'
-      env:
-        MetalamaLicense: ${{ secrets.METALAMA_LICENSE }}
+      # No licence key here either -- see the note on the step above.
       run: ./Build.ps1 test-packages tests/packages/Windows --build-tool ${{ startsWith(matrix.build-tool, 'msbuild') && 'msbuild' || 'dotnet' }} --target-framework net${{ matrix.dotnet-version }} --nologo
 
     # Create build cache marker file

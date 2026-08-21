@@ -476,9 +476,13 @@ thirteen have no license task. **No secret is required**: Backstage's
 process, which every CI runner is. Verified on run 32364738233 — all sixteen packages
 passed with `MetalamaLicense` empty and no `METALAMA_LICENSE` secret in the repo or org.
 
-The workflow still passes `$(MetalamaLicense)` from an optional `METALAMA_LICENSE` secret.
-That is only an override for the day unattended detection stops applying; an unset secret
-is an empty value and the unattended licence takes over.
+**Do not pass a licence key to these steps.** The workflow used to forward
+`$(MetalamaLicense)` from a `METALAMA_LICENSE` secret as a safety net. That turned out to
+be actively harmful: a real key is *signed*, so verifying it needs finite field DSA, which
+.NET 11 removed from macOS (metalama/Metalama#1860). Supplying the key is what breaks the
+macOS .NET 11 cells. The unattended licence is unsigned and never touches DSA, so passing
+nothing is both simpler and more portable. The secret may still exist in the repository;
+nothing reads it.
 
 **Local builds do not reproduce CI licensing, in either direction.** A developer machine
 with a registered Metalama licence passes silently for the wrong reason. Adding
