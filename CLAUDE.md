@@ -392,7 +392,7 @@ with `dotnet-version: 11.0` selects the 67 `11.0` cells alone.
 ## The summary issue is only written by tracked branches
 
 `generate-summary` writes to a single per-branch pseudo-issue
-(`SUMMARY_ISSUE_NUMBER`, #7 on 2026.1) and opens a new issue for every failed
+(`SUMMARY_ISSUE_NUMBER`, #12 on 2027.0) and opens a new issue for every failed
 cell. Both are keyed to the branch's *constant*, not to the run, so a run on a
 topic branch used to overwrite the develop branch's last good full-matrix report
 with its own partial one — and file failure issues for a matrix nobody expected

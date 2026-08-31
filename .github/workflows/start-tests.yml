@@ -35,6 +35,8 @@ jobs:
             delay-minutes: 0
           - branch: 'develop/2026.1'
             delay-minutes: 20
+          - branch: 'develop/2027.0'
+            delay-minutes: 40
 
     steps:
     - name: Wait ${{ matrix.delay-minutes }} minute(s) before triggering
