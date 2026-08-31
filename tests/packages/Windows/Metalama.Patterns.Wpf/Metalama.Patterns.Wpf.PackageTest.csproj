@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <!-- Metalama.Patterns.Wpf targets net*-windows and needs the WPF framework
+             reference, so this project overrides the shared target framework. -->
+        <TargetFramework>$(PackageTestTargetFramework)-windows</TargetFramework>
+        <UseWPF>true</UseWPF>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Metalama.Patterns.Wpf" Version="$(MetalamaVersion)" />
+    </ItemGroup>
+
+</Project>

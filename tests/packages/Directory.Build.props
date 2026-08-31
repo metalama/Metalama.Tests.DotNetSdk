@@ -1,0 +1,37 @@
+<Project>
+
+    <!-- Imports Directory.Build.props of the upper directory. Use this code in any non-root Directory.Build.* even if the file does not exist. -->
+    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" Condition="Exists('$([MSBuild]::GetPathOfFileAbove(`Directory.Build.props`, `$(MSBuildThisFileDirectory)../`))')"/>
+
+    <PropertyGroup>
+        <!-- The matrix cell decides which .NET version these projects target: the workflow
+             passes -p:PackageTestTargetFramework=netN.0 to match matrix.dotnet-version. The
+             default only exists so the projects stay buildable from a developer machine. -->
+        <PackageTestTargetFramework Condition="'$(PackageTestTargetFramework)' == ''">net9.0</PackageTestTargetFramework>
+        <TargetFramework>$(PackageTestTargetFramework)</TargetFramework>
+
+        <OutputType>Exe</OutputType>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+
+        <!-- As in the main test project: a source generator that fails to run must fail
+             the build rather than silently contributing nothing. -->
+        <WarningsAsErrors>CS8785</WarningsAsErrors>
+
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Every package test needs Metalama.Framework, both because aspects are written
+             against it and because it brings in Metalama.Compiler, without which the
+             C# language version these packages are built for is not available. -->
+        <PackageReference Include="Metalama.Framework" Version="$(MetalamaVersion)" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Every package test shares the same assertion helper, the same way the main
+             test project shares IntroduceClassAttribute.cs from src/Directory.Build.props. -->
+        <Compile Include="$(MSBuildThisFileDirectory)PackageTestCheck.cs" />
+    </ItemGroup>
+
+</Project>

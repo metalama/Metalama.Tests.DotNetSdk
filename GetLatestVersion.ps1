@@ -1,4 +1,4 @@
-# Get the latest .NET SDK version from GitHub API
+﻿# Get the latest .NET SDK version from GitHub API
 param(
     [Parameter(Mandatory=$true)]
     [string]$VersionPrefix
@@ -14,6 +14,70 @@ if ($cleanedPrefix -match '^(\d+\.\d+)\.?(\d*)$') {
 } else {
     Write-Error "Invalid version prefix format. Use format like '8.0', '9.0', '8.0.1xxx', '8.0.1xx', etc."
     exit 1
+}
+
+# Resolve the newest SDK of a channel from the official .NET release metadata.
+#
+# This is the feed dotnet-install itself reads, so it is always current. It is
+# used as a FALLBACK only -- see the note further down on why the GitHub
+# releases remain the primary source.
+function Get-SdkVersionFromReleaseMetadata {
+    param(
+        [string]$MajorMinor,
+        [string]$FeatureBand
+    )
+
+    $indexUrl = "https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json"
+
+    try {
+        $index = Invoke-RestMethod -Uri $indexUrl -UseBasicParsing
+    }
+    catch {
+        Write-Warning "Could not read the .NET release metadata index: $($_.Exception.Message)"
+
+        return $null
+    }
+
+    $channel = $index.'releases-index' | Where-Object { $_.'channel-version' -eq $MajorMinor } | Select-Object -First 1
+
+    if ( -not $channel ) {
+        Write-Warning "The .NET release metadata index has no '$MajorMinor' channel."
+
+        return $null
+    }
+
+    if ( -not $FeatureBand ) {
+        return $channel.'latest-sdk'
+    }
+
+    # A feature band needs the per-channel file: the index carries only the
+    # channel's single latest SDK, which may belong to a different band.
+    try {
+        $channelReleases = Invoke-RestMethod -Uri $channel.'releases.json' -UseBasicParsing
+    }
+    catch {
+        Write-Warning "Could not read the '$MajorMinor' release metadata: $($_.Exception.Message)"
+
+        return $null
+    }
+
+    $bandPrefix = $FeatureBand.Substring( 0, 1 )
+
+    # `releases` is ordered newest release first, so the first match is the
+    # newest SDK of that band -- no version sorting needed (and none is easy
+    # here, since preview versions do not parse as [Version]).
+    $match = $channelReleases.releases |
+        ForEach-Object { if ( $_.sdks ) { $_.sdks } else { $_.sdk } } |
+        Where-Object { $_.version -match "^$MajorMinor\.$bandPrefix\d{2}" } |
+        Select-Object -First 1
+
+    if ( -not $match ) {
+        Write-Warning "The '$MajorMinor' release metadata has no SDK in the '$FeatureBand' band."
+
+        return $null
+    }
+
+    return $match.version
 }
 
 # GitHub API URL for .NET SDK releases
@@ -97,6 +161,42 @@ foreach ($release in $releases) {
             }
         }
     }
+}
+
+# Preview channels: the GitHub releases are NOT authoritative.
+#
+# dotnet/sdk publishes a GitHub release for every servicing build, but it stopped
+# tagging the .NET 11 previews after preview 2 (2026-03) while the product kept
+# shipping a preview a month. Resolving '11.0' from GitHub therefore returned a
+# five-month-old SDK. A channel that GitHub reports as prerelease-only is one we
+# cannot trust to be current, so read it from the official release metadata
+# instead. The same fallback covers a channel GitHub does not know at all.
+#
+# Stable channels keep using the GitHub releases: that is what this script was
+# written for (dotnet-install does not always resolve to the latest version when
+# the full version carries a suffix), and it is the only source here that
+# supports feature-band filtering directly.
+$hasStableRelease = @( $matchingVersions | Where-Object { -not $_.IsPrerelease } ).Count -gt 0
+
+if ( -not $hasStableRelease ) {
+    $reason = if ( $matchingVersions.Count -eq 0 ) {
+        "GitHub has no SDK release matching '$VersionPrefix'"
+    } else {
+        "GitHub has only prereleases for '$VersionPrefix' (newest: $(($matchingVersions | Select-Object -First 1).Version))"
+    }
+
+    Write-Host "::notice::$reason - falling back to the official .NET release metadata."
+
+    $metadataVersion = Get-SdkVersionFromReleaseMetadata -MajorMinor $majorMinor -FeatureBand $featureBand
+
+    if ( $metadataVersion ) {
+        Write-Host "::notice::Resolved '$VersionPrefix' to '$metadataVersion' from the release metadata."
+        Write-Output $metadataVersion
+
+        exit 0
+    }
+
+    Write-Warning "The release metadata fallback failed; falling back to the GitHub releases."
 }
 
 if ($matchingVersions.Count -eq 0) {

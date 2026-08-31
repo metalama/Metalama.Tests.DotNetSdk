@@ -26,6 +26,7 @@ on:
           - '8.0'
           - '9.0'
           - '10.0'
+          - '11.0'
       project-type:
         description: 'Project type (or "all" for full matrix)'
         required: false
@@ -63,6 +64,11 @@ on:
           - msbuild-x64
           - msbuild-x86
           - msbuild-arm64
+      metalama-branch:
+        description: 'Metalama branch to take the artifacts from (default: this branch, or its parent develop branch when this is a topic branch)'
+        required: false
+        default: ''
+        type: string
 
 env:
   SUMMARY_ISSUE_NUMBER: 7  # Issue number for this branch
@@ -95,13 +101,25 @@ env:
   # the image), so for .NET 8 only the Xcode selection matters.
   MACOS_MAUI_SDK_9_0:   '9.0.313'     # dotnet-9.0.1xx-xcode26.2.9008   -> Xcode 26.3
   MACOS_MAUI_SDK_10_0:  '10.0.202'    # dotnet-10.0.1xx-xcode26.2-10233 -> Xcode 26.3
+  # .NET 11 is in preview and lags hardest: preview 4 and later require Xcode
+  # 26.4+, which in turn requires macOS 26.2 -- the macos-15 image tops out at
+  # Xcode 26.3. dotnet-11.0.1xx-preview3 is therefore the newest .NET 11 macios
+  # release this runner can host. It will move up only when the OS axis gains a
+  # macos-26 runner, not when a newer preview ships.
+  MACOS_MAUI_SDK_11_0:  '11.0.100-preview.3.26207.106'   # dotnet-11.0.1xx-preview3-11588 -> Xcode 26.3
   MACOS_MAUI_XCODE_8_0:  '16.0'       # dotnet-8.0.1xx-xcode16.0-8319
   MACOS_MAUI_XCODE_9_0:  '26.3'
   MACOS_MAUI_XCODE_10_0: '26.3'
+  MACOS_MAUI_XCODE_11_0: '26.3'
+  # The workload SET version is normally the SDK version, which is why the pins
+  # above serve as both. The .NET 11 previews break that: SDK
+  # 11.0.100-preview.3.26207.106 ships alongside workload set
+  # 11.0.100-preview.3.26214.1. So this band carries an explicit set pin.
+  MACOS_MAUI_WORKLOADSET_11_0: '11.0.100-preview.3.26214.1'
   # ═══════════════════════════════════════════════════════════════════════════
 
   # Workflow-level so the dependency-seeding job can key its cache on it too.
-  CacheKeyPrefix: '2026.1-4' # Increase this value to invalidate the cache.
+  CacheKeyPrefix: '2026.1-5' # Increase this value to invalidate the cache.
 
 jobs:
 
@@ -162,6 +180,8 @@ jobs:
     outputs:
       build-number: ${{ steps.resolve.outputs.build-number }}
       build-type-id: ${{ steps.resolve.outputs.build-type-id }}
+      premium-build-number: ${{ steps.resolve.outputs.premium-build-number }}
+      premium-build-type-id: ${{ steps.resolve.outputs.premium-build-type-id }}
       deps-id: ${{ steps.resolve.outputs.deps-id }}
     steps:
     - name: Checkout
@@ -220,6 +240,38 @@ jobs:
           Write-Host 'No previously cached dependencies.'
         }
 
+    # Which Metalama branch to take the artifacts from.
+    #
+    # TeamCity resolves "the latest Metalama build on branch X", and X used to be
+    # this repository's own branch name. That only works for branches that exist
+    # in BOTH repositories -- the develop/* and release/* lines. A topic branch
+    # here has no counterpart in Metalama, so the lookup failed with
+    #
+    #   Cannot get the last build for build type '...', branch '...': No build available.
+    #
+    # and, since `build` needs this job, took the whole run with it (32359427586).
+    #
+    # A topic branch therefore falls back to the develop branch it forks from,
+    # which its own name already encodes: topic/2026.1/net11 -> develop/2026.1.
+    # The `metalama-branch` dispatch input overrides this, for the case where a
+    # topic branch here DOES have a matching Metalama branch to test against.
+    - name: Resolve the Metalama branch
+      id: metalama-branch
+      shell: pwsh
+      run: |
+        $branch = '${{ inputs.metalama-branch }}'
+        $ref = '${{ github.ref_name }}'
+        if ( $branch ) {
+          Write-Host "Using the Metalama branch given on dispatch."
+        } elseif ( $ref -match '^topic/([^/]+)/' ) {
+          $branch = "develop/$($Matches[1])"
+          Write-Host "'$ref' is a topic branch with no Metalama counterpart; using its parent develop branch."
+        } else {
+          $branch = $ref
+        }
+        Write-Host "::notice::Metalama dependency branch: $branch"
+        "branch=$branch" >> $env:GITHUB_OUTPUT
+
     # `dependencies set` already resolves the branch and downloads the artifacts
     # (Metalama and, transitively, Metalama.Compiler) -- a separate
     # `dependencies fetch` would be redundant.
@@ -244,7 +296,7 @@ jobs:
         $attempts = 3
         for ($i = 1; $i -le $attempts; $i++) {
           Write-Host "Dependency download attempt $i of $attempts."
-          ./Build.ps1 dependencies set BuildServer Metalama --branch ${{ github.ref_name }} --nologo --no-progress
+          ./Build.ps1 dependencies set BuildServer Metalama Metalama.Premium --branch ${{ steps.metalama-branch.outputs.branch }} --nologo --no-progress
           if ($LASTEXITCODE -eq 0) { exit 0 }
           if ($i -lt $attempts) {
             Write-Host "::warning::Attempt $i failed with exit code $LASTEXITCODE. Retrying in 60 s."
@@ -273,12 +325,19 @@ jobs:
         foreach ($s in $sources) { Write-Host "  $($s.Include) #$($s.BuildNumber) ($($s.CiBuildTypeId))" }
         $metalama = $sources | Where-Object { $_.Include -eq 'Metalama' } | Select-Object -First 1
         if (-not $metalama) { Write-Error 'The Metalama dependency was not resolved.'; exit 1 }
+        # Metalama.Premium carries the Extensions.Architecture / .Validation / .CodeFixes and
+        # Caching.Backends.* packages that the package tests exercise. It has always been an
+        # explicit dependency of this product; it simply had no source configured.
+        $premium = $sources | Where-Object { $_.Include -eq 'Metalama.Premium' } | Select-Object -First 1
+        if (-not $premium) { Write-Error 'The Metalama.Premium dependency was not resolved.'; exit 1 }
         # Identity of the whole dependency set, so a change in ANY resolved build
         # (including transitive ones such as Metalama.Compiler) busts the cache.
         $depsId = (($sources | Sort-Object Include |
           ForEach-Object { "$($_.Include)-$($_.CiBuildTypeId)-$($_.BuildNumber)" }) -join '_')
         "build-number=$($metalama.BuildNumber)" >> $env:GITHUB_OUTPUT
         "build-type-id=$($metalama.CiBuildTypeId)" >> $env:GITHUB_OUTPUT
+        "premium-build-number=$($premium.BuildNumber)" >> $env:GITHUB_OUTPUT
+        "premium-build-type-id=$($premium.CiBuildTypeId)" >> $env:GITHUB_OUTPUT
         "deps-id=$depsId" >> $env:GITHUB_OUTPUT
         Write-Host "deps-id=$depsId"
 
@@ -315,7 +374,7 @@ jobs:
         # When input is 'all' or empty, use full array; otherwise wrap single value in array
         # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
         os: ${{ inputs.os != 'all' && inputs.os != '' && fromJson(format('["{0}"]', inputs.os)) || fromJson('["ubuntu-24.04", "ubuntu-22.04", "ubuntu-24.04-arm", "windows-latest", "windows-11-vs2026-arm", "macos-15"]') }}
-        dotnet-version: ${{ inputs.dotnet-version != 'all' && inputs.dotnet-version != '' && fromJson(format('["{0}"]', inputs.dotnet-version)) || fromJson('["8.0", "9.0", "10.0"]') }}
+        dotnet-version: ${{ inputs.dotnet-version != 'all' && inputs.dotnet-version != '' && fromJson(format('["{0}"]', inputs.dotnet-version)) || fromJson('["8.0", "9.0", "10.0", "11.0"]') }}
         project-type: ${{ inputs.project-type != 'all' && inputs.project-type != '' && fromJson(format('["{0}"]', inputs.project-type)) || fromJson('["console", "maui", "maui-blazor", "mvc", "razor", "blazor", "blazorwasm", "winforms", "wpf"]') }}  # dotnet new list
         sdk-source: ${{ inputs.sdk-source != 'all' && inputs.sdk-source != '' && fromJson(format('["{0}"]', inputs.sdk-source)) || fromJson('["setup-dotnet", "setup-dotnet-x86", "apt"]') }}
         # Which tool drives the build: the `dotnet` CLI, or the .NET Framework
@@ -432,6 +491,13 @@ jobs:
           - sdk-source: setup-dotnet-x86
             build-tool: msbuild-x86
 
+          # There is no .NET 11 apt package. The dotnet/backports PPA publishes
+          # dotnet6..dotnet10 only; Canonical does not package .NET previews, and
+          # will not until .NET 11 reaches GA. `apt-get install dotnet11` fails
+          # outright, so the whole apt axis is excluded for this band.
+          - dotnet-version: '11.0'
+            sdk-source: apt
+
           # ubuntu-22.04 is only used for .NET 10.0 apt (dotnet10 package not available for 24.04)
           - os: ubuntu-22.04
             sdk-source: setup-dotnet
@@ -439,6 +505,8 @@ jobs:
             dotnet-version: '8.0'
           - os: ubuntu-22.04
             dotnet-version: '9.0'
+          - os: ubuntu-22.04
+            dotnet-version: '11.0'
 
           # .NET 10.0 apt not available on ubuntu 24.04 - use ubuntu-22.04 instead
           - os: ubuntu-24.04
@@ -501,7 +569,11 @@ jobs:
         # block above and CLAUDE.md), so for those jobs we use the pinned version.
         # Every other job keeps tracking the latest SDK.
         $isMacMaui = ('${{ matrix.os }}' -eq 'macos-15') -and ('${{ matrix.project-type }}' -eq 'maui' -or '${{ matrix.project-type }}' -eq 'maui-blazor')
-        $pin = @{ '9.0' = '${{ env.MACOS_MAUI_SDK_9_0 }}'; '10.0' = '${{ env.MACOS_MAUI_SDK_10_0 }}' }['${{ matrix.dotnet-version }}']
+        $pin = @{
+          '9.0'  = '${{ env.MACOS_MAUI_SDK_9_0 }}'
+          '10.0' = '${{ env.MACOS_MAUI_SDK_10_0 }}'
+          '11.0' = '${{ env.MACOS_MAUI_SDK_11_0 }}'
+        }['${{ matrix.dotnet-version }}']
         if ($isMacMaui -and $pin) {
           $exactVersion = $pin
           Write-Host "macOS MAUI job: pinned .NET ${{ matrix.dotnet-version }} to $exactVersion (Xcode-compatible workload set)."
@@ -696,10 +768,16 @@ jobs:
     # every Windows job pulled from TeamCity. Better to fail loudly here.
     # Build numbers are still resolved against TeamCity; only the artifact download
     # is forbidden.
+    # Two invocations rather than one: --buildNumber/--buildTypeId describe a single
+    # dependency, so each pinned dependency needs its own call.
     - name: Configure the dependency to Metalama
       shell: pwsh
       if: steps.cache-build.outputs.cache-hit != 'true'
-      run: ./Build.ps1 dependencies set BuildServer Metalama --buildNumber ${{ needs.resolve-dependencies.outputs.build-number }} --buildTypeId ${{ needs.resolve-dependencies.outputs.build-type-id }} --cached-only --nologo --no-progress
+      run: |
+        ./Build.ps1 dependencies set BuildServer Metalama --buildNumber ${{ needs.resolve-dependencies.outputs.build-number }} --buildTypeId ${{ needs.resolve-dependencies.outputs.build-type-id }} --cached-only --nologo --no-progress
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        ./Build.ps1 dependencies set BuildServer Metalama.Premium --buildNumber ${{ needs.resolve-dependencies.outputs.premium-build-number }} --buildTypeId ${{ needs.resolve-dependencies.outputs.premium-build-type-id }} --cached-only --nologo --no-progress
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Install Java
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && steps.cache-build.outputs.cache-hit != 'true'
@@ -743,7 +821,7 @@ jobs:
       uses: maxim-lobanov/setup-xcode@v1
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15' && steps.cache-build.outputs.cache-hit != 'true'
       with:
-        xcode-version: ${{ matrix.dotnet-version == '8.0' && env.MACOS_MAUI_XCODE_8_0 || matrix.dotnet-version == '9.0' && env.MACOS_MAUI_XCODE_9_0 || env.MACOS_MAUI_XCODE_10_0 }}
+        xcode-version: ${{ matrix.dotnet-version == '8.0' && env.MACOS_MAUI_XCODE_8_0 || matrix.dotnet-version == '9.0' && env.MACOS_MAUI_XCODE_9_0 || matrix.dotnet-version == '10.0' && env.MACOS_MAUI_XCODE_10_0 || env.MACOS_MAUI_XCODE_11_0 }}
 
     - name: Configure Xcode
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
@@ -789,7 +867,16 @@ jobs:
           # pins in the env block and CLAUDE.md) so it does not resolve to a newer
           # workload that needs an Xcode absent from the runner image. .NET 8 has
           # no band conflict and no documented workload set, so it installs unpinned.
-          $pinArgs = if ('${{ matrix.dotnet-version }}' -eq '8.0') { @() } else { @('--version', '${{ steps.get-exact-version.outputs.exact-version }}') }
+          #
+          # For .NET 9/10 the workload set version IS the SDK version, so the SDK
+          # pin doubles as the set pin. The .NET 11 previews version the two
+          # independently, so that band pins the set explicitly.
+          $workloadSet = @{
+            '9.0'  = '${{ steps.get-exact-version.outputs.exact-version }}'
+            '10.0' = '${{ steps.get-exact-version.outputs.exact-version }}'
+            '11.0' = '${{ env.MACOS_MAUI_WORKLOADSET_11_0 }}'
+          }['${{ matrix.dotnet-version }}']
+          $pinArgs = if ($workloadSet) { @('--version', $workloadSet) } else { @() }
           foreach ($wl in 'maui-android', 'maui-ios', 'maui-maccatalyst') {
             dotnet workload install $wl @pinArgs
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -909,6 +996,42 @@ jobs:
       if:  steps.cache-build.outputs.cache-hit != 'true'
       run: ./Build.ps1 verify-transformations --nologo
 
+    # ─── Metalama.Patterns / Metalama.Extensions package tests ───────────────────
+    #
+    # One small program per package under tests/packages, each exercising one obvious
+    # feature and returning non-zero if it did not work.
+    #
+    # These are gated on the PROJECT TYPE, which is a filter over the existing cells
+    # rather than a new matrix axis. That is not a compromise: the `console` cells
+    # already span all 41 distinct (os, dotnet-version, sdk-source, build-tool)
+    # combinations the full matrix contains, so running the package tests there covers
+    # every platform exactly once instead of nine times.
+    #
+    # The Windows-only set (Metalama.Patterns.Wpf, which needs a net*-windows target and
+    # UseWPF) rides on the `wpf` cells for the same reason: those 24 cells cover every
+    # Windows combination.
+    - name: Test packages
+      shell: pwsh
+      if: matrix.project-type == 'console' && steps.cache-build.outputs.cache-hit != 'true'
+      # No licence key is passed, deliberately.
+      #
+      # Metalama.Extensions.Validation / .CodeFixes and Caching.Backends.Azure / .Redis
+      # run VerifyMetalamaLicense at build time. Backstage's UnattendedLicenseSource
+      # grants a Metalama Professional licence to any unattended process, which every
+      # runner here is, and that licence is UNSIGNED.
+      #
+      # Passing a real key is worse than passing nothing on this matrix. A real key is
+      # signed, so verifying it needs finite field DSA, which .NET 11 removed from macOS
+      # (metalama/Metalama#1860). Supplying the key is therefore what BREAKS the macOS
+      # .NET 11 cells; without it the unsigned unattended licence never touches DSA.
+      run: ./Build.ps1 test-packages tests/packages --build-tool ${{ startsWith(matrix.build-tool, 'msbuild') && 'msbuild' || 'dotnet' }} --target-framework net${{ matrix.dotnet-version }} --nologo
+
+    - name: Test Windows-only packages
+      shell: pwsh
+      if: matrix.project-type == 'wpf' && steps.cache-build.outputs.cache-hit != 'true'
+      # No licence key here either -- see the note on the step above.
+      run: ./Build.ps1 test-packages tests/packages/Windows --build-tool ${{ startsWith(matrix.build-tool, 'msbuild') && 'msbuild' || 'dotnet' }} --target-framework net${{ matrix.dotnet-version }} --nologo
+
     # Create build cache marker file
     - name: Mark build cache as successful
       if: steps.cache-build.outputs.cache-hit != 'true'
@@ -942,9 +1065,17 @@ jobs:
         script: |
           const branch = context.ref.replace('refs/heads/', '');
           const issueNumber = process.env.SUMMARY_ISSUE_NUMBER;
-          
+
+          // Only the long-lived branches own the summary issue. SUMMARY_ISSUE_NUMBER
+          // is a per-branch constant, so a run on a topic branch would overwrite the
+          // develop branch's last good full-matrix report with its own partial one --
+          // and open failure issues for a matrix that was never meant to be green.
+          // Topic-branch runs therefore report to the run summary only.
+          const isTrackedBranch = branch.startsWith('develop/') || branch.startsWith('release/');
+
           console.log(`Branch: ${branch}`);
           console.log(`Issue number: ${issueNumber}`);
+          console.log(`Writes to issues: ${isTrackedBranch ? 'yes' : 'no (untracked branch)'}`);
         
           
           // Get current workflow run details
@@ -1029,6 +1160,10 @@ jobs:
           // label may not exist in the repository, which fails creation with 422,
           // and a report without labels beats no report.
           const createFailureIssue = async (title, body) => {
+            if (!isTrackedBranch) {
+              console.log(`ℹ️ Untracked branch '${branch}' - not opening a failure issue. Title would have been: ${title}`);
+              return null;
+            }
             const create = (labels) => github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -1257,24 +1392,33 @@ jobs:
             `*This summary is automatically updated when the Platform Integration Tests workflow completes on the \`${branch}\` branch.*`
           ].join('\n');
           
+          // The report always goes to the run summary, whatever the branch. On an
+          // untracked branch that is the only place it appears.
+          await core.summary.addRaw(markdown).write();
+
           // Update the issue
           let summaryError = null;
-          try {
-            await github.rest.issues.update({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: parseInt(issueNumber),
-              body: issueBody
-            });
 
-            console.log(`✅ Successfully updated issue #${issueNumber} with latest test summary`);
-            console.log(`🔗 View at: https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}`);
+          if (!isTrackedBranch) {
+            console.log(`ℹ️ Untracked branch '${branch}' - leaving issue #${issueNumber} alone. The report is in the run summary.`);
+          } else {
+            try {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: parseInt(issueNumber),
+                body: issueBody
+              });
 
-          } catch (error) {
-            console.error(`❌ Failed to update issue #${issueNumber}:`, error.message);
-            // Remember the error but keep going: a failure report is more useful
-            // than no report at all, and it is rethrown at the end of the script.
-            summaryError = error;
+              console.log(`✅ Successfully updated issue #${issueNumber} with latest test summary`);
+              console.log(`🔗 View at: https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${issueNumber}`);
+
+            } catch (error) {
+              console.error(`❌ Failed to update issue #${issueNumber}:`, error.message);
+              // Remember the error but keep going: a failure report is more useful
+              // than no report at all, and it is rethrown at the end of the script.
+              summaryError = error;
+            }
           }
 
           // ── Failure report ─────────────────────────────────────────────────
