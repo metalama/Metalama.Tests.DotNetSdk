@@ -192,7 +192,7 @@ jobs:
     - name: Install .NET For Engineering
       uses: actions/setup-dotnet@v5
       with:
-        dotnet-version: 9.0.3xx # Keep in sync with eng/src/global.json.
+        dotnet-version: 10.0.4xx # Keep in sync with eng/src/global.json.
 
     # PostSharp.Engineering derives the artifact cache location from USERPROFILE
     # and falls back to Path.GetTempPath() when it is unset -- which on Linux and
@@ -690,7 +690,7 @@ jobs:
       id: setup-dotnet-eng
       if: matrix.sdk-source != 'apt' && steps.cache-build.outputs.cache-hit != 'true'
       with:
-        dotnet-version: 9.0.3xx # Keep in sync with eng\src\global.json.
+        dotnet-version: 10.0.4xx # Keep in sync with eng\src\global.json.
         architecture: ${{ matrix.sdk-source == 'setup-dotnet-x86' && 'x86' || '' }}
 
     # apt jobs: install the engineering SDK into apt's dotnet root so that one
@@ -701,8 +701,8 @@ jobs:
       run: |
         curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
         chmod +x /tmp/dotnet-install.sh
-        # 9.0.3xx feature band — keep in sync with eng/src/global.json.
-        sudo /tmp/dotnet-install.sh --channel 9.0.3xx --install-dir "$APT_DOTNET_DIR" --no-path
+        # 10.0.4xx feature band — keep in sync with eng/src/global.json.
+        sudo /tmp/dotnet-install.sh --channel 10.0.4xx --install-dir "$APT_DOTNET_DIR" --no-path
         echo "Engineering SDK installed into $APT_DOTNET_DIR; SDKs now visible:"
         dotnet --list-sdks
 

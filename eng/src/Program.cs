@@ -12,7 +12,7 @@ var product = new Product( MetalamaDependencies.DotNetSdkTests )
 {
     GenerateNuGetConfig = true,
     GenerateTeamCitySettings = false,
-    DotNetSdkVersion = new DotNetSdkVersion( PreferredVersions.DotNetSdk.V_9_0 ) { AllowPrerelease = true },
+    DotNetSdkVersion = new DotNetSdkVersion( MetalamaDependencies.Family.PreferredVersions.DotNetSdk.V_10_0 ),
     Solutions = [new DotNetSolution( ProjectInfo.ProjectPath ) { BuildMethod = BuildMethod.Build }],
 };
 
