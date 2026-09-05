@@ -8,11 +8,13 @@ using PostSharp.Engineering.BuildTools.Build.Model;
 using PostSharp.Engineering.BuildTools.Build.Solutions;
 using MetalamaDependencies = PostSharp.Engineering.BuildTools.Dependencies.Definitions.MetalamaDependencies.V2026_1;
 
+var preferredVersions = MetalamaDependencies.Family.PreferredVersions;
+
 var product = new Product( MetalamaDependencies.DotNetSdkTests )
 {
     GenerateNuGetConfig = true,
     GenerateTeamCitySettings = false,
-    DotNetSdkVersion = new DotNetSdkVersion( PreferredVersions.DotNetSdk.V_9_0 ) { AllowPrerelease = true },
+    DotNetSdkVersion = new DotNetSdkVersion( preferredVersions.DotNetSdk.V_9_0 ) { AllowPrerelease = true },
     Solutions = [new DotNetSolution( ProjectInfo.ProjectPath ) { BuildMethod = BuildMethod.Build }],
 };
 
