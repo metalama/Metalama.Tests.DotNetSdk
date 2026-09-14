@@ -305,17 +305,15 @@ These macOS jobs cannot use the latest .NET SDK, because:
 So the macOS MAUI jobs are **pinned** in the `env:` block at the top of
 `test.yml`:
 
-- `MACOS_MAUI_SDK_9_0`, `MACOS_MAUI_SDK_10_0`, `MACOS_MAUI_SDK_11_0` — the SDK
-  version, which for the released bands is also the workload-set version passed
-  to `dotnet workload install --version`.
+- `MACOS_MAUI_SDK_10_0`, `MACOS_MAUI_SDK_11_0` — the SDK version, which for the
+  released bands is also the workload-set version passed to
+  `dotnet workload install --version`.
 - `MACOS_MAUI_WORKLOADSET_11_0` — the workload-set version, needed only where it
   differs from the SDK version. It does for the .NET 11 previews (SDK
   `11.0.100-preview.3.26207.106` ships with set `11.0.100-preview.3.26214.1`);
-  for .NET 9/10 the two are identical, so those bands have no such variable and
-  the install step reuses the SDK pin.
-- `MACOS_MAUI_XCODE_8_0` / `_9_0` / `_10_0` / `_11_0` — the Xcode the pinned
-  workload requires (.NET 8 has no SDK pin; its iOS workload is frozen at Xcode
-  16.0, which is always on the image).
+  for .NET 10 the two are identical, so that band has no such variable and the
+  install step reuses the SDK pin.
+- `MACOS_MAUI_XCODE_10_0` / `_11_0` — the Xcode the pinned workload requires.
 
 The pins lag intentionally. **Review them periodically** (roughly monthly, or
 whenever a macOS MAUI job fails with a `requires Xcode` error):
@@ -344,6 +342,60 @@ This is deliberate manual maintenance: there is no way to be on the latest .NET
 SDK and a working iOS/MacCatalyst workload at the same time during the gap
 between an Xcode release and the runner image picking it up.
 
+
+## Which .NET bands are on the matrix, and the 256-cell cap
+
+The `dotnet-version` axis is **not** "every band that still builds". It is the set
+of user target frameworks the release supports, which is decided by the platform
+support doctrine in `metalama/Metalama`,
+`Metalama.Framework/docs/platform-support.md`. That document is the authoritative
+answer to "can we drop `net8.0`?" and to every question of that shape; do not
+re-derive the answer here.
+
+For 2027.0 the baseline is `PB-2027.0`, whose supported user target frameworks are
+`net10.0` and `net11.0`. .NET 8 and .NET 9 both reach end of support on 2026-11-10,
+seven weeks before the 2027.0 general availability date, so both left the axis.
+
+**GitHub caps a single job's matrix at 256 configurations.** This is a hard limit
+and it is enforced *before* any job is created: the run fails in about a minute
+with
+
+```
+.github/workflows/test.yml (Line: NNN, Col: 7): Strategy for job 'build'
+produced 297 configurations which exceeds the maximum of 256 configurations
+```
+
+as a **run-level annotation**. There is no failed job, so `gh run view --log-failed`
+shows nothing and `gh run view` shows only `resolve-dependencies` and
+`generate-summary`; the error is visible only on the run's web page or in the
+check-suite annotations. `generate-summary` reports it correctly as "the matrix
+never ran" (it was written for the seeding-failure case, which looks identical from
+the outside).
+
+The .NET 11 axis pushed the matrix to 297 and this went unnoticed for two weeks:
+runs 33447326663 and 34838549294 both died this way, and `develop/2027.0` never
+completed a full matrix between them. Dropping .NET 8 and .NET 9 brought it to 141.
+
+**Check the count before adding an axis value.** The excludes make it impossible to
+guess:
+
+```bash
+python -c "
+import yaml,itertools
+m=yaml.safe_load(open('.github/workflows/test.yml',encoding='utf-8'))['jobs']['build']['strategy']['matrix']
+ax={'os':['ubuntu-24.04','ubuntu-22.04','ubuntu-24.04-arm','windows-latest','windows-11-vs2026-arm','macos-15'],'dotnet-version':['10.0','11.0'],'project-type':['console','maui','maui-blazor','mvc','razor','blazor','blazorwasm','winforms','wpf'],'sdk-source':['setup-dotnet','setup-dotnet-x86','apt'],'build-tool':['dotnet','msbuild-x64','msbuild-x86','msbuild-arm64']}
+k=list(ax);c=[dict(zip(k,v)) for v in itertools.product(*ax.values())]
+print(len([x for x in c if not any(all(str(x[a])==str(b) for a,b in e.items()) for e in m['exclude'])]))"
+```
+
+The axis lists are duplicated there because they live inside a `${{ }}` expression
+that a YAML parser cannot evaluate. Keep them in step with the workflow.
+
+If the matrix ever genuinely needs more than 256 cells, the job has to be split —
+into a `workflow_call` workflow invoked once per shard, or into chunks emitted by a
+matrix-generating job. Both change the generated job names, so `generate-summary`'s
+`job.name.startsWith('build (')` filter and its five-group regex have to move with
+them.
 
 ## .NET 11
 
@@ -385,9 +437,8 @@ This pin will **not** move forward when a newer preview ships — only when the
 `os` axis gains a `macos-26` runner. That is the real fix and is deliberately
 out of scope here: it changes every macOS cell, not just the .NET 11 ones.
 
-**The matrix grows by ~29%.** 230 cells for 8/9/10, 297 with 11.0 added. That
-only matters for the weekly scheduled runs on the develop branches; dispatching
-with `dotnet-version: 11.0` selects the 67 `11.0` cells alone.
+**It is 67 of the 141 cells.** Dispatching with `dotnet-version: 11.0` selects
+those alone.
 
 ## The summary issue is only written by tracked branches
 
@@ -444,12 +495,12 @@ all and prints a per-package summary.
 **They add no matrix dimension.** The steps are gated on `matrix.project-type`, which is a
 filter over existing cells:
 
-- `console` cells run `tests/packages`. Those 41 cells already span **all 41** distinct
-  `(os, dotnet-version, sdk-source, build-tool)` combinations in the 297-cell matrix, so
-  this is full platform coverage — running them in every cell would repeat the same 41
+- `console` cells run `tests/packages`. Those 19 cells already span **all 19** distinct
+  `(os, dotnet-version, sdk-source, build-tool)` combinations in the 141-cell matrix, so
+  this is full platform coverage — running them in every cell would repeat the same 19
   combinations nine times for nothing.
 - `wpf` cells run `tests/packages/Windows`, which holds `Metalama.Patterns.Wpf` (it needs
-  a `net*-windows` target framework and `UseWPF`). Those 24 cells cover every Windows
+  a `net*-windows` target framework and `UseWPF`). Those 12 cells cover every Windows
   combination.
 
 If you add a package that only builds on Windows, put it under `tests/packages/Windows`.

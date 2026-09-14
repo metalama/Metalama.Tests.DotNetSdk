@@ -23,8 +23,6 @@ on:
         type: choice
         options:
           - all
-          - '8.0'
-          - '9.0'
           - '10.0'
           - '11.0'
       project-type:
@@ -97,9 +95,6 @@ env:
   # the workload-set version) plus the Xcode that release requires. Sources:
   #   - workload set + required Xcode: https://github.com/dotnet/macios/releases
   #   - Xcode versions on the runner:  actions/runner-images macos-15 readme
-  # .NET 8 needs no SDK pin: its iOS workload is frozen at Xcode 16.0 (always on
-  # the image), so for .NET 8 only the Xcode selection matters.
-  MACOS_MAUI_SDK_9_0:   '9.0.313'     # dotnet-9.0.1xx-xcode26.2.9008   -> Xcode 26.3
   MACOS_MAUI_SDK_10_0:  '10.0.202'    # dotnet-10.0.1xx-xcode26.2-10233 -> Xcode 26.3
   # .NET 11 is in preview and lags hardest: preview 4 and later require Xcode
   # 26.4+, which in turn requires macOS 26.2 -- the macos-15 image tops out at
@@ -107,12 +102,10 @@ env:
   # release this runner can host. It will move up only when the OS axis gains a
   # macos-26 runner, not when a newer preview ships.
   MACOS_MAUI_SDK_11_0:  '11.0.100-preview.3.26207.106'   # dotnet-11.0.1xx-preview3-11588 -> Xcode 26.3
-  MACOS_MAUI_XCODE_8_0:  '16.0'       # dotnet-8.0.1xx-xcode16.0-8319
-  MACOS_MAUI_XCODE_9_0:  '26.3'
   MACOS_MAUI_XCODE_10_0: '26.3'
   MACOS_MAUI_XCODE_11_0: '26.3'
-  # The workload SET version is normally the SDK version, which is why the pins
-  # above serve as both. The .NET 11 previews break that: SDK
+  # The workload SET version is normally the SDK version, which is why the .NET 10
+  # pin above serves as both. The .NET 11 previews break that: SDK
   # 11.0.100-preview.3.26207.106 ships alongside workload set
   # 11.0.100-preview.3.26214.1. So this band carries an explicit set pin.
   MACOS_MAUI_WORKLOADSET_11_0: '11.0.100-preview.3.26214.1'
@@ -374,7 +367,7 @@ jobs:
         # When input is 'all' or empty, use full array; otherwise wrap single value in array
         # Find and replace macos-15 to macos-latest as soon as macos-15 get out of preview.
         os: ${{ inputs.os != 'all' && inputs.os != '' && fromJson(format('["{0}"]', inputs.os)) || fromJson('["ubuntu-24.04", "ubuntu-22.04", "ubuntu-24.04-arm", "windows-latest", "windows-11-vs2026-arm", "macos-15"]') }}
-        dotnet-version: ${{ inputs.dotnet-version != 'all' && inputs.dotnet-version != '' && fromJson(format('["{0}"]', inputs.dotnet-version)) || fromJson('["8.0", "9.0", "10.0", "11.0"]') }}
+        dotnet-version: ${{ inputs.dotnet-version != 'all' && inputs.dotnet-version != '' && fromJson(format('["{0}"]', inputs.dotnet-version)) || fromJson('["10.0", "11.0"]') }}
         project-type: ${{ inputs.project-type != 'all' && inputs.project-type != '' && fromJson(format('["{0}"]', inputs.project-type)) || fromJson('["console", "maui", "maui-blazor", "mvc", "razor", "blazor", "blazorwasm", "winforms", "wpf"]') }}  # dotnet new list
         sdk-source: ${{ inputs.sdk-source != 'all' && inputs.sdk-source != '' && fromJson(format('["{0}"]', inputs.sdk-source)) || fromJson('["setup-dotnet", "setup-dotnet-x86", "apt"]') }}
         # Which tool drives the build: the `dotnet` CLI, or the .NET Framework
@@ -502,10 +495,6 @@ jobs:
           - os: ubuntu-22.04
             sdk-source: setup-dotnet
           - os: ubuntu-22.04
-            dotnet-version: '8.0'
-          - os: ubuntu-22.04
-            dotnet-version: '9.0'
-          - os: ubuntu-22.04
             dotnet-version: '11.0'
 
           # .NET 10.0 apt not available on ubuntu 24.04 - use ubuntu-22.04 instead
@@ -514,18 +503,6 @@ jobs:
             sdk-source: apt
           - os: ubuntu-24.04-arm
             dotnet-version: '10.0'
-            sdk-source: apt
-
-          # .NET 8 MAUI is not testable on the apt SDK: the Canonical-packaged
-          # .NET 8 SDK does not recognize the maui-android workload (`dotnet
-          # workload install maui-android` fails immediately with "Workload ID
-          # maui-android is not recognized"). .NET 9/10 apt SDKs do support it.
-          # .NET 8 MAUI is still covered by the setup-dotnet jobs on every OS.
-          - dotnet-version: '8.0'
-            project-type: maui
-            sdk-source: apt
-          - dotnet-version: '8.0'
-            project-type: maui-blazor
             sdk-source: apt
 
       fail-fast: false # Don't stop other jobs if one fails.
@@ -570,7 +547,6 @@ jobs:
         # Every other job keeps tracking the latest SDK.
         $isMacMaui = ('${{ matrix.os }}' -eq 'macos-15') -and ('${{ matrix.project-type }}' -eq 'maui' -or '${{ matrix.project-type }}' -eq 'maui-blazor')
         $pin = @{
-          '9.0'  = '${{ env.MACOS_MAUI_SDK_9_0 }}'
           '10.0' = '${{ env.MACOS_MAUI_SDK_10_0 }}'
           '11.0' = '${{ env.MACOS_MAUI_SDK_11_0 }}'
         }['${{ matrix.dotnet-version }}']
@@ -587,7 +563,7 @@ jobs:
 
     # Install .NET SDK via apt package manager (Ubuntu only)
     # Note: We install before cache check because we need the version for the cache key
-    # The backports PPA uses package names like "dotnet8", "dotnet9", "dotnet10"
+    # The backports PPA uses package names like "dotnet9", "dotnet10"
     # See: https://launchpad.net/~dotnet/+archive/ubuntu/backports
     - name: Install .NET SDK via apt
       id: setup-dotnet-apt
@@ -595,7 +571,7 @@ jobs:
       run: |
         sudo add-apt-repository ppa:dotnet/backports -y
         sudo apt-get update
-        # Backports PPA uses "dotnetX" naming (e.g., dotnet8, dotnet9, dotnet10)
+        # Backports PPA uses "dotnetX" naming (e.g., dotnet9, dotnet10)
         DOTNET_MAJOR=$(echo "${{ matrix.dotnet-version }}" | cut -d. -f1)
         sudo apt-get install -y dotnet${DOTNET_MAJOR}
         # Resolve the SDK version from the folders apt actually created under
@@ -821,7 +797,7 @@ jobs:
       uses: maxim-lobanov/setup-xcode@v1
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15' && steps.cache-build.outputs.cache-hit != 'true'
       with:
-        xcode-version: ${{ matrix.dotnet-version == '8.0' && env.MACOS_MAUI_XCODE_8_0 || matrix.dotnet-version == '9.0' && env.MACOS_MAUI_XCODE_9_0 || matrix.dotnet-version == '10.0' && env.MACOS_MAUI_XCODE_10_0 || env.MACOS_MAUI_XCODE_11_0 }}
+        xcode-version: ${{ matrix.dotnet-version == '10.0' && env.MACOS_MAUI_XCODE_10_0 || env.MACOS_MAUI_XCODE_11_0 }}
 
     - name: Configure Xcode
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.os == 'macos-15'  && steps.cache-build.outputs.cache-hit != 'true'
@@ -865,14 +841,12 @@ jobs:
           # macOS builds the iOS + Mac Catalyst TFMs. Pin the workload set to the
           # same Xcode-compatible version as the SDK (see the macOS MAUI version
           # pins in the env block and CLAUDE.md) so it does not resolve to a newer
-          # workload that needs an Xcode absent from the runner image. .NET 8 has
-          # no band conflict and no documented workload set, so it installs unpinned.
+          # workload that needs an Xcode absent from the runner image.
           #
-          # For .NET 9/10 the workload set version IS the SDK version, so the SDK
+          # For .NET 10 the workload set version IS the SDK version, so the SDK
           # pin doubles as the set pin. The .NET 11 previews version the two
           # independently, so that band pins the set explicitly.
           $workloadSet = @{
-            '9.0'  = '${{ steps.get-exact-version.outputs.exact-version }}'
             '10.0' = '${{ steps.get-exact-version.outputs.exact-version }}'
             '11.0' = '${{ env.MACOS_MAUI_WORKLOADSET_11_0 }}'
           }['${{ matrix.dotnet-version }}']
@@ -891,7 +865,7 @@ jobs:
 
     # Workload install for apt MAUI jobs.
     #
-    # .NET 9/10: the Canonical apt SDK is a fixed patch (e.g. 10.0.107); a plain
+    # The Canonical apt SDK is a fixed patch (e.g. 10.0.107); a plain
     # `dotnet workload install` first auto-updates to the newest workload SET
     # (e.g. 10.0.108), newer than that SDK. The garbage-collection pass that ends
     # every install then resolves the SDK's feature band against the mismatched
@@ -901,21 +875,10 @@ jobs:
     # agree and the packs survive (including Microsoft.Maui.Templates.netN, which
     # registers the maui / maui-blazor templates -- so, unlike the non-apt Linux
     # path above, no separate `dotnet new install` is needed).
-    #
-    # .NET 8: it has no workload set, and the apt 8.0 SDK's baseline manifests do
-    # not even define the maui-android workload, so --skip-manifest-update there
-    # fails with "Workload ID maui-android is not recognized". .NET 8 must update
-    # its manifests; with no workload set there is no set/SDK mismatch, so that
-    # plain install's GC is not destructive.
     - name: Install .NET Workloads (apt jobs)
       if: (matrix.project-type == 'maui' || matrix.project-type == 'maui-blazor') && matrix.sdk-source == 'apt' && steps.cache-build.outputs.cache-hit != 'true'
       shell: pwsh
-      run: |
-        if ('${{ matrix.dotnet-version }}' -eq '8.0') {
-          dotnet workload install maui-android
-        } else {
-          dotnet workload install maui-android --skip-manifest-update
-        }
+      run: dotnet workload install maui-android --skip-manifest-update
 
     - name: Set ref version for Assembly Locator
       shell: pwsh

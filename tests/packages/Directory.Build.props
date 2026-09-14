@@ -7,7 +7,7 @@
         <!-- The matrix cell decides which .NET version these projects target: the workflow
              passes -p:PackageTestTargetFramework=netN.0 to match matrix.dotnet-version. The
              default only exists so the projects stay buildable from a developer machine. -->
-        <PackageTestTargetFramework Condition="'$(PackageTestTargetFramework)' == ''">net9.0</PackageTestTargetFramework>
+        <PackageTestTargetFramework Condition="'$(PackageTestTargetFramework)' == ''">net10.0</PackageTestTargetFramework>
         <TargetFramework>$(PackageTestTargetFramework)</TargetFramework>
 
         <OutputType>Exe</OutputType>
