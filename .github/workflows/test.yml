@@ -635,10 +635,22 @@ jobs:
         }
         $globalJson | ConvertTo-Json -Depth 3 | Set-Content -Path "./global.json"
 
+    # On Windows ARM64 runners, pwsh.exe (which setup-dotnet uses to run
+    # install-dotnet.ps1) intermittently crashes at startup with
+    # "Internal CLR error. (0x80131506)" in TaskbarJumpList.CreateElevatedEntry.
+    # See https://github.com/dotnet/runtime/issues/131636. The crash does not
+    # depend on the inputs, so on these runners a failed attempt is retried once.
     - name: Install .NET For The Test
       uses: actions/setup-dotnet@v5
       id: setup-dotnet
       if: matrix.sdk-source != 'apt' && steps.cache-build.outputs.cache-hit != 'true'
+      continue-on-error: ${{ runner.os == 'Windows' && runner.arch == 'ARM64' }}
+      with:
+        dotnet-version: ${{ steps.get-exact-version.outputs.exact-version }}
+
+    - name: Install .NET For The Test (retry)
+      uses: actions/setup-dotnet@v5
+      if: steps.setup-dotnet.outcome == 'failure'
       with:
         dotnet-version: ${{ steps.get-exact-version.outputs.exact-version }}
         # An empty value means "the runner's own architecture". For x86, setup-dotnet
@@ -661,10 +673,18 @@ jobs:
     # while the test SDK is in the x86 one. For apt jobs the test SDK is in apt's
     # root (/usr/lib/dotnet), so the engineering SDK is installed there too --
     # see the apt-specific step below.
+    # Retried once on Windows ARM64 runners: see "Install .NET For The Test".
     - name: Install .NET For Engineering
       uses: actions/setup-dotnet@v5
       id: setup-dotnet-eng
       if: matrix.sdk-source != 'apt' && steps.cache-build.outputs.cache-hit != 'true'
+      continue-on-error: ${{ runner.os == 'Windows' && runner.arch == 'ARM64' }}
+      with:
+        dotnet-version: 9.0.3xx # Keep in sync with eng\src\global.json.
+
+    - name: Install .NET For Engineering (retry)
+      uses: actions/setup-dotnet@v4
+      if: steps.setup-dotnet-eng.outcome == 'failure'
       with:
         dotnet-version: 10.0.4xx # Keep in sync with eng\src\global.json.
         architecture: ${{ matrix.sdk-source == 'setup-dotnet-x86' && 'x86' || '' }}
